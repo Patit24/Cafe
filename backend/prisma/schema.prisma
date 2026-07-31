@@ -1,0 +1,188 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SalaryType {
+  hourly
+  daily
+  monthly
+}
+
+enum AttendanceStatus {
+  working
+  on_break
+  completed
+  exception
+}
+
+enum PayrollStatus {
+  generated
+  locked
+  paid
+}
+
+enum LeaveStatus {
+  pending
+  approved
+  rejected
+}
+
+enum LeaveType {
+  paid
+  unpaid
+}
+
+model Department {
+  id        String     @id @default(uuid()) @db.Uuid
+  name      String     @db.VarChar(255)
+  createdAt DateTime   @default(now()) @db.Timestamptz
+  roles     Role[]
+  employees Employee[]
+
+  @@map("departments")
+}
+
+model Role {
+  id           String      @id @default(uuid()) @db.Uuid
+  name         String      @db.VarChar(255)
+  departmentId String?     @map("department_id") @db.Uuid
+  department   Department? @relation(fields: [departmentId], references: [id])
+  createdAt    DateTime    @default(now()) @db.Timestamptz
+  employees    Employee[]
+
+  @@map("roles")
+}
+
+model ShiftTemplate {
+  id               String             @id @default(uuid()) @db.Uuid
+  name             String             @db.VarChar(255)
+  startTime        DateTime           @map("start_time") @db.Time
+  endTime          DateTime           @map("end_time") @db.Time
+  requiredHours    Decimal            @map("required_hours") @db.Decimal(5, 2)
+  maxBreakHours    Decimal?           @default(0) @map("max_break_hours") @db.Decimal(5, 2)
+  latePenaltyRules Json?              @map("late_penalty_rules")
+  createdAt        DateTime           @default(now()) @db.Timestamptz
+  employees        Employee[]
+  attendances      AttendanceRecord[]
+
+  @@map("shift_templates")
+}
+
+model Employee {
+  id             String             @id @default(uuid()) @db.Uuid
+  employeeCode   String             @unique @map("employee_code") @db.VarChar(50)
+  name           String             @db.VarChar(255)
+  departmentId   String?            @map("department_id") @db.Uuid
+  department     Department?        @relation(fields: [departmentId], references: [id])
+  roleId         String?            @map("role_id") @db.Uuid
+  role           Role?              @relation(fields: [roleId], references: [id])
+  shiftId        String?            @map("shift_id") @db.Uuid
+  shift          ShiftTemplate?     @relation(fields: [shiftId], references: [id])
+  salaryType     SalaryType         @map("salary_type")
+  salaryRate     Decimal            @map("salary_rate") @db.Decimal(10, 2)
+  overtimeRate   Decimal?           @default(0) @map("overtime_rate") @db.Decimal(10, 2)
+  isActive       Boolean?           @default(true) @map("is_active")
+  createdAt      DateTime           @default(now()) @db.Timestamptz
+  faces          EmployeeFace[]
+  attendances    AttendanceRecord[]
+  payrollEntries PayrollEntry[]
+  leaves         LeaveApplication[]
+
+  @@map("employees")
+}
+
+model EmployeeFace {
+  id            String    @id @default(uuid()) @db.Uuid
+  employeeId    String?   @map("employee_id") @db.Uuid
+  employee      Employee? @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  faceEmbedding Json      @map("face_embedding")
+  createdAt     DateTime  @default(now()) @db.Timestamptz
+
+  @@map("employee_faces")
+}
+
+model AttendanceRecord {
+  id                      String            @id @default(uuid()) @db.Uuid
+  employeeId              String?           @map("employee_id") @db.Uuid
+  employee                Employee?         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  shiftId                 String?           @map("shift_id") @db.Uuid
+  shift                   ShiftTemplate?    @relation(fields: [shiftId], references: [id])
+  date                    DateTime          @db.Date
+  checkInTime             DateTime?         @map("check_in_time") @db.Timestamptz
+  checkOutTime            DateTime?         @map("check_out_time") @db.Timestamptz
+  netWorkingMinutes       Int?              @default(0) @map("net_working_minutes")
+  breakMinutes            Int?              @default(0) @map("break_minutes")
+  regularMinutes          Int?              @default(0) @map("regular_minutes")
+  overtimeMinutes         Int?              @default(0) @map("overtime_minutes")
+  penaltyDeductionMinutes Int?              @default(0) @map("penalty_deduction_minutes")
+  faceMatchScore          Decimal?          @map("face_match_score") @db.Decimal(5, 2)
+  status                  AttendanceStatus  @default(working)
+  deviceId                String?           @map("device_id") @db.VarChar(255)
+  gpsLocation             String?           @map("gps_location") @db.VarChar(255)
+  createdAt               DateTime          @default(now()) @db.Timestamptz
+  breaks                  AttendanceBreak[]
+
+  @@map("attendance_records")
+}
+
+model AttendanceBreak {
+  id                 String            @id @default(uuid()) @db.Uuid
+  attendanceRecordId String?           @map("attendance_record_id") @db.Uuid
+  attendanceRecord   AttendanceRecord? @relation(fields: [attendanceRecordId], references: [id], onDelete: Cascade)
+  startTime          DateTime          @map("start_time") @db.Timestamptz
+  endTime            DateTime?         @map("end_time") @db.Timestamptz
+  createdAt          DateTime          @default(now()) @db.Timestamptz
+
+  @@map("attendance_breaks")
+}
+
+model PayrollEntry {
+  id                 String        @id @default(uuid()) @db.Uuid
+  employeeId         String?       @map("employee_id") @db.Uuid
+  employee           Employee?     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  periodStart        DateTime      @map("period_start") @db.Date
+  periodEnd          DateTime      @map("period_end") @db.Date
+  totalWorkingHours  Decimal?      @default(0) @map("total_working_hours") @db.Decimal(10, 2)
+  totalOvertimeHours Decimal?      @default(0) @map("total_overtime_hours") @db.Decimal(10, 2)
+  baseSalary         Decimal?      @default(0) @map("base_salary") @db.Decimal(10, 2)
+  overtimePay        Decimal?      @default(0) @map("overtime_pay") @db.Decimal(10, 2)
+  bonuses            Decimal?      @default(0) @db.Decimal(10, 2)
+  deductions         Decimal?      @default(0) @db.Decimal(10, 2)
+  penaltyDeductions  Decimal?      @default(0) @map("penalty_deductions") @db.Decimal(10, 2)
+  netSalary          Decimal?      @default(0) @map("net_salary") @db.Decimal(10, 2)
+  status             PayrollStatus @default(generated)
+  createdAt          DateTime      @default(now()) @db.Timestamptz
+
+  @@map("payroll_entries")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  entityType  String   @map("entity_type") @db.VarChar(255)
+  entityId    String   @map("entity_id") @db.Uuid
+  action      String   @db.VarChar(255)
+  changes     Json?
+  performedBy String?  @map("performed_by") @db.Uuid
+  createdAt   DateTime @default(now()) @db.Timestamptz
+
+  @@map("audit_logs")
+}
+
+model LeaveApplication {
+  id         String      @id @default(uuid()) @db.Uuid
+  employeeId String?     @map("employee_id") @db.Uuid
+  employee   Employee?   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  startDate  DateTime    @map("start_date") @db.Date
+  endDate    DateTime    @map("end_date") @db.Date
+  reason     String      @db.Text
+  status     LeaveStatus @default(approved)
+  type       LeaveType   @default(unpaid)
+  createdAt  DateTime    @default(now()) @db.Timestamptz
+
+  @@map("leave_applications")
+}

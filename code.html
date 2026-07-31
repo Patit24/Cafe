@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Employee Management - Kinetic Ops</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-error": "#ffffff",
+                        "on-tertiary": "#ffffff",
+                        "surface-variant": "#e3e2e2",
+                        "inverse-surface": "#303031",
+                        "on-secondary-fixed-variant": "#004b6f",
+                        "primary-fixed": "#d2e4fb",
+                        "surface-container": "#efeded",
+                        "on-primary": "#ffffff",
+                        "on-error-container": "#93000a",
+                        "error-container": "#ffdad6",
+                        "surface": "#faf9f9",
+                        "surface-container-low": "#f5f3f3",
+                        "on-primary-fixed": "#0b1d2d",
+                        "on-primary-container": "#8192a7",
+                        "inverse-on-surface": "#f2f0f0",
+                        "secondary-fixed-dim": "#8ccdff",
+                        "secondary-fixed": "#cae6ff",
+                        "tertiary": "#261000",
+                        "surface-dim": "#dbdad9",
+                        "on-tertiary-container": "#d07d30",
+                        "tertiary-container": "#432100",
+                        "background": "#faf9f9",
+                        "on-surface": "#1b1c1c",
+                        "on-secondary-fixed": "#001e2f",
+                        "error": "#ba1a1a",
+                        "on-surface-variant": "#44474c",
+                        "on-secondary-container": "#004a6d",
+                        "on-primary-fixed-variant": "#38485a",
+                        "surface-tint": "#4f6073",
+                        "secondary-container": "#58bcfd",
+                        "tertiary-fixed-dim": "#ffb77d",
+                        "surface-container-highest": "#e3e2e2",
+                        "secondary": "#006492",
+                        "on-secondary": "#ffffff",
+                        "tertiary-fixed": "#ffdcc3",
+                        "surface-container-lowest": "#ffffff",
+                        "primary": "#041627",
+                        "outline-variant": "#c4c6cd",
+                        "on-background": "#1b1c1c",
+                        "primary-fixed-dim": "#b7c8de",
+                        "primary-container": "#1a2b3c",
+                        "on-tertiary-fixed-variant": "#6e3900",
+                        "outline": "#74777d",
+                        "on-tertiary-fixed": "#2f1500",
+                        "surface-container-high": "#e9e8e8",
+                        "inverse-primary": "#b7c8de",
+                        "surface-bright": "#faf9f9"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "gutter": "16px",
+                        "stack-md": "12px",
+                        "touch-target-min": "48px",
+                        "margin-desktop": "32px",
+                        "margin-mobile": "16px",
+                        "stack-lg": "24px",
+                        "base": "8px",
+                        "stack-sm": "4px"
+                    },
+                    "fontFamily": {
+                        "label-sm": ["Inter"],
+                        "body-md": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "headline-lg-mobile": ["Inter"],
+                        "label-md": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "body-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "label-sm": ["12px", { "lineHeight": "16px", "fontWeight": "500" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "headline-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "body-lg": ["18px", { "lineHeight": "26px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-background text-on-background font-body-md antialiased min-h-screen flex flex-col md:flex-row">
+<!-- SideNav (Desktop) -->
+<nav class="hidden md:flex flex-col h-screen w-64 fixed left-0 top-0 py-base px-stack-md bg-surface-container dark:bg-inverse-surface border-r border-outline-variant dark:border-outline shadow-sm z-40">
+<div class="flex items-center gap-stack-md mb-stack-lg p-stack-sm">
+<div class="w-10 h-10 rounded-full bg-primary-container overflow-hidden shrink-0">
+<img alt="Kitchen Admin" class="w-full h-full object-cover" data-alt="A close-up portrait of a professional kitchen administrator in a bright, clean, modern kitchen environment. The lighting is soft and high-key, emphasizing a light-mode corporate aesthetic. The subject wears a dark navy uniform, contrasting slightly with the pristine background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAmaOb2kSFcFzkSPYN3HF1GZZPp_OhRZD5so4iAtJXROgmzXpQ2IZ4Gq_bjurKHud5pZcEfnEpSU0tavx6pjvcigry6fkx_74XHug6mJhLLfI73actgHCRgiPenq-wckZHBdHdJWqQvCcTvfl2DLpTXCvbJmjgq3Lhw8Ha3RSjKFgwoy1838LR28viDZSZatqYBtGpQWRTZGyzwzrGIphpIHGBNv24wkeutz_bwUq57VHdO0A0P9lo-cQ"/>
+</div>
+<div>
+<div class="font-headline-md text-headline-md font-extrabold text-primary">Kitchen Admin</div>
+<div class="font-label-sm text-label-sm text-on-surface-variant">Main Branch</div>
+</div>
+</div>
+<button class="w-full h-touch-target-min bg-primary text-on-primary rounded-lg font-label-md text-label-md flex items-center justify-center gap-2 mb-stack-lg shadow-sm hover:opacity-90 transition-opacity">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">timer</span>
+            Clock In Staff
+        </button>
+<div class="flex-1 flex flex-col gap-2">
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high dark:hover:bg-surface-variant transition-all scale-95 active:scale-90" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+                Dashboard
+            </a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg font-label-md text-label-md text-secondary font-bold bg-secondary-fixed dark:bg-secondary-container transition-all scale-95 active:scale-90" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">group</span>
+                Employees
+            </a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high dark:hover:bg-surface-variant transition-all scale-95 active:scale-90" href="#">
+<span class="material-symbols-outlined">schedule</span>
+                Shifts
+            </a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high dark:hover:bg-surface-variant transition-all scale-95 active:scale-90" href="#">
+<span class="material-symbols-outlined">payments</span>
+                Payroll
+            </a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high dark:hover:bg-surface-variant transition-all scale-95 active:scale-90" href="#">
+<span class="material-symbols-outlined">assessment</span>
+                Reports
+            </a>
+</div>
+<div class="mt-auto flex flex-col gap-2 pt-stack-lg border-t border-outline-variant">
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high dark:hover:bg-surface-variant transition-all scale-95 active:scale-90" href="#">
+<span class="material-symbols-outlined">settings</span>
+                Settings
+            </a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high dark:hover:bg-surface-variant transition-all scale-95 active:scale-90" href="#">
+<span class="material-symbols-outlined">help</span>
+                Support
+            </a>
+</div>
+</nav>
+<!-- Main Content Area -->
+<main class="flex-1 md:ml-64 flex flex-col min-h-screen">
+<!-- Top Nav (Mobile & Desktop) -->
+<header class="flex justify-between items-center px-margin-mobile md:px-margin-desktop w-full h-16 sticky top-0 z-30 bg-surface dark:bg-surface-container-low border-b border-outline-variant dark:border-outline">
+<div class="flex items-center gap-4">
+<button class="md:hidden p-2 -ml-2 text-on-surface-variant">
+<span class="material-symbols-outlined">menu</span>
+</button>
+<div class="font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed">Kinetic Ops</div>
+</div>
+<div class="flex-1 max-w-md mx-4 hidden md:block">
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
+<input class="w-full h-10 pl-10 pr-4 rounded-full bg-surface-container-high border-none text-on-surface placeholder:text-on-surface-variant focus:ring-2 focus:ring-primary focus:bg-surface transition-all font-body-md text-body-md" placeholder="Search employees..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<button class="p-2 rounded-full text-on-surface-variant hover:bg-surface-container-high transition-colors active:opacity-80 transition-all duration-150">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-2 rounded-full text-on-surface-variant hover:bg-surface-container-high transition-colors active:opacity-80 transition-all duration-150 hidden md:block">
+<span class="material-symbols-outlined">settings</span>
+</button>
+<div class="w-8 h-8 rounded-full bg-primary-container overflow-hidden ml-2 md:hidden">
+<img alt="Administrator profile" class="w-full h-full object-cover" data-alt="A close-up portrait of a professional kitchen administrator in a bright, clean, modern kitchen environment. The lighting is soft and high-key, emphasizing a light-mode corporate aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBGfISD_OAotdpLUv8TuQT2t7YMqj0nX67-nw5Rll3BdYTtyLgp0oszN_jDwnuLAu2Ltx-LkRu7p1JR1EydMmy9Ii2XDCGkFcAKDK0O3vayDUtJlAXZVUiR1H1cQjkHAhRTA9SzifSfScRT-T9IU6dumG1Ww1J-M5O8MqUIIoivIuE2JUOXtgnDqIsGKG7VnvnQ1JEw383LfY5cdZ4YXCnWF2QhOaAppMfpMnYlA-jTm25XJgsyF1Oycw"/>
+</div>
+</div>
+</header>
+<!-- Canvas -->
+<div class="flex-1 p-margin-mobile md:p-margin-desktop overflow-x-hidden">
+<!-- Page Header -->
+<div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-stack-lg">
+<div>
+<h1 class="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-background">Employee Directory</h1>
+<p class="font-body-md text-body-md text-on-surface-variant mt-1">Manage kitchen staff, roles, and current statuses.</p>
+</div>
+<div class="w-full md:w-auto flex gap-3">
+<button class="flex-1 md:flex-none h-touch-target-min px-6 border border-outline rounded-lg font-label-md text-label-md text-on-surface flex items-center justify-center gap-2 hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined">filter_list</span>
+                        Filters
+                    </button>
+<button class="flex-1 md:flex-none h-touch-target-min px-6 bg-primary text-on-primary rounded-lg font-label-md text-label-md flex items-center justify-center gap-2 hover:bg-primary-container hover:text-on-primary-container transition-colors shadow-sm">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">person_add</span>
+                        Add New Employee
+                    </button>
+</div>
+</div>
+<!-- Mobile Search (Visible only on small screens) -->
+<div class="mb-stack-lg md:hidden">
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
+<input class="w-full h-touch-target-min pl-10 pr-4 rounded-lg bg-surface border border-outline-variant text-on-surface placeholder:text-on-surface-variant focus:border-primary focus:ring-1 focus:ring-primary transition-all font-body-md text-body-md" placeholder="Search..." type="text"/>
+</div>
+</div>
+<!-- Employee List (Bento/Card layout for mobile, Table for Desktop) -->
+<!-- Desktop Table View -->
+<div class="hidden lg:block bg-surface rounded-xl border border-outline-variant shadow-sm overflow-hidden">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-low border-b border-outline-variant">
+<th class="py-4 px-6 font-label-md text-label-md text-on-surface-variant font-medium">Employee</th>
+<th class="py-4 px-6 font-label-md text-label-md text-on-surface-variant font-medium">ID</th>
+<th class="py-4 px-6 font-label-md text-label-md text-on-surface-variant font-medium">Department</th>
+<th class="py-4 px-6 font-label-md text-label-md text-on-surface-variant font-medium">Assigned Shift</th>
+<th class="py-4 px-6 font-label-md text-label-md text-on-surface-variant font-medium">Status</th>
+<th class="py-4 px-6 font-label-md text-label-md text-on-surface-variant font-medium text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant">
+<!-- Row 1 -->
+<tr class="hover:bg-surface-container-lowest transition-colors group">
+<td class="py-4 px-6">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-surface-container overflow-hidden">
+<img alt="Profile" class="w-full h-full object-cover" data-alt="A portrait of a male sous chef in a pristine white uniform, smiling warmly in a bright commercial kitchen. The lighting is clean and professional, emphasizing a modern light-mode design aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB0TEQcxMjAYBP8R8Q1BuofxpNpa5rVkJ1tJbQb2d_6rOELSGWm9TpQi6gHkVvfF-KiHf7uqteuzvv9NY4eQ_tLnmNdVbII4eEJY7QpfZovixSgv6X1q0lHSY9_2GOiGblVSvTNcTJUtwUa-lz6J0t0gHXcAeiTHmLJi8fKAmo_QRJd2AvZdc_-qXtBrZjiPP57_7FaIGmX4IlUQ23X50dT7IpQ4m5EucslzawtHxFr3zIuexXfyGL8ZQ"/>
+</div>
+<div>
+<div class="font-label-md text-label-md text-on-surface font-semibold">Marcus Johnson</div>
+<div class="font-label-sm text-label-sm text-on-surface-variant">Sous Chef</div>
+</div>
+</div>
+</td>
+<td class="py-4 px-6 font-body-md text-body-md text-on-surface-variant">EMP-042</td>
+<td class="py-4 px-6 font-body-md text-body-md text-on-surface">Hot Line</td>
+<td class="py-4 px-6 font-body-md text-body-md text-on-surface">Dinner (4PM - 12AM)</td>
+<td class="py-4 px-6">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed font-label-sm text-label-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+                                    Active
+                                </span>
+</td>
+<td class="py-4 px-6 text-right">
+<button class="p-2 text-on-surface-variant hover:text-primary transition-colors rounded-full hover:bg-surface-container-high opacity-0 group-hover:opacity-100 focus:opacity-100">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-surface-container-lowest transition-colors group">
+<td class="py-4 px-6">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-surface-container overflow-hidden">
+<img alt="Profile" class="w-full h-full object-cover" data-alt="A portrait of a young female prep cook looking focused, wearing a neat apron over a dark shirt in a well-lit modern prep kitchen. The color palette is bright with crisp whites and deep navy accents." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBPwL3KllVI1sQ-d-H-CslbZxE0bAkhHhXGjRAqeuvZxB_9hYYYAsQYBDxO6TFbD2dXUNwDe_lCudNQlmEY-PesN0ETn4oIbYL1IHosjGcuGEZx7GIN3IA-rqVh9lO_w-g4KUkjd3vx31mOhC-1vaa7fzrwuHPtnRc_2ggwYyxWZXRgu6k_D-weFaYmVk8kEO7eox6Z-X-8LT7AVxb-Vmr95nwlcyI0_yryiuTi_69_JLVOxAV-QwhmhA"/>
+</div>
+<div>
+<div class="font-label-md text-label-md text-on-surface font-semibold">Sarah Chen</div>
+<div class="font-label-sm text-label-sm text-on-surface-variant">Prep Cook</div>
+</div>
+</div>
+</td>
+<td class="py-4 px-6 font-body-md text-body-md text-on-surface-variant">EMP-089</td>
+<td class="py-4 px-6 font-body-md text-body-md text-on-surface">Prep Station</td>
+<td class="py-4 px-6 font-body-md text-body-md text-on-surface">Morning (6AM - 2PM)</td>
+<td class="py-4 px-6">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed font-label-sm text-label-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+                                    Active
+                                </span>
+</td>
+<td class="py-4 px-6 text-right">
+<button class="p-2 text-on-surface-variant hover:text-primary transition-colors rounded-full hover:bg-surface-container-high opacity-0 group-hover:opacity-100 focus:opacity-100">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-surface-container-lowest transition-colors group">
+<td class="py-4 px-6">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-surface-container overflow-hidden flex items-center justify-center text-on-surface-variant font-label-md text-label-md">
+                                        DL
+                                    </div>
+<div>
+<div class="font-label-md text-label-md text-on-surface font-semibold">David Lopez</div>
+<div class="font-label-sm text-label-sm text-on-surface-variant">Dishwasher</div>
+</div>
+</div>
+</td>
+<td class="py-4 px-6 font-body-md text-body-md text-on-surface-variant">EMP-112</td>
+<td class="py-4 px-6 font-body-md text-body-md text-on-surface">Utility</td>
+<td class="py-4 px-6 font-body-md text-body-md text-on-surface text-on-surface-variant">Unassigned</td>
+<td class="py-4 px-6">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-container-highest text-on-surface-variant font-label-sm text-label-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-outline"></span>
+                                    Inactive
+                                </span>
+</td>
+<td class="py-4 px-6 text-right">
+<button class="p-2 text-on-surface-variant hover:text-primary transition-colors rounded-full hover:bg-surface-container-high opacity-0 group-hover:opacity-100 focus:opacity-100">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</td>
+</tr>
+</tbody>
+</table>
+<div class="p-4 border-t border-outline-variant flex items-center justify-between bg-surface-container-low">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Showing 3 of 42 employees</span>
+<div class="flex gap-2">
+<button class="w-8 h-8 flex items-center justify-center rounded border border-outline-variant text-on-surface-variant disabled:opacity-50" disabled=""><span class="material-symbols-outlined text-sm">chevron_left</span></button>
+<button class="w-8 h-8 flex items-center justify-center rounded border border-outline-variant bg-surface text-on-surface hover:bg-surface-container transition-colors"><span class="material-symbols-outlined text-sm">chevron_right</span></button>
+</div>
+</div>
+</div>
+<!-- Mobile Card View -->
+<div class="lg:hidden flex flex-col gap-4">
+<!-- Card 1 -->
+<div class="bg-surface rounded-xl border border-outline-variant p-4 shadow-sm relative overflow-hidden flex flex-col gap-4">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-secondary"></div>
+<div class="flex justify-between items-start pl-2">
+<div class="flex items-center gap-3">
+<div class="w-12 h-12 rounded-full bg-surface-container overflow-hidden">
+<img alt="Profile" class="w-full h-full object-cover" data-alt="A portrait of a male sous chef in a pristine white uniform, smiling warmly in a bright commercial kitchen. The lighting is clean and professional, emphasizing a modern light-mode design aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAJaVJ9HJshS3u_KnjZ3j-k9wEYMii2TIiIsWWmbApT76F83FW_j2wfjHXEVIHVWMdouXz648FvlyiodfNUARLxmc7XpOEszd4G_NlCEwUbQ1xZg3FpLu5aViY341lEgROqs-bpctHpFywsJNbhqrbulvo5dhy5hq5niPaQFZZ1UWL4jc821kop1JilqAn-qsbrhS26PW_Z8iqvAPFuSpW0gE0zNI_bLe2V8VEh8HEBdOSXOUocaP8lxQ"/>
+</div>
+<div>
+<div class="font-label-md text-label-md text-on-surface font-semibold">Marcus Johnson</div>
+<div class="font-label-sm text-label-sm text-on-surface-variant">EMP-042 • Sous Chef</div>
+</div>
+</div>
+<button class="p-1 text-on-surface-variant">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+<div class="pl-2 grid grid-cols-2 gap-y-3 gap-x-2">
+<div>
+<div class="font-label-sm text-label-sm text-on-surface-variant mb-1">Department</div>
+<div class="font-body-md text-body-md text-on-surface">Hot Line</div>
+</div>
+<div>
+<div class="font-label-sm text-label-sm text-on-surface-variant mb-1">Status</div>
+<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-secondary-fixed text-on-secondary-fixed font-label-sm text-label-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>Active
+                            </span>
+</div>
+<div class="col-span-2">
+<div class="font-label-sm text-label-sm text-on-surface-variant mb-1">Assigned Shift</div>
+<div class="font-body-md text-body-md text-on-surface">Dinner (4PM - 12AM)</div>
+</div>
+</div>
+</div>
+<!-- Card 2 -->
+<div class="bg-surface rounded-xl border border-outline-variant p-4 shadow-sm relative overflow-hidden flex flex-col gap-4">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-secondary"></div>
+<div class="flex justify-between items-start pl-2">
+<div class="flex items-center gap-3">
+<div class="w-12 h-12 rounded-full bg-surface-container overflow-hidden">
+<img alt="Profile" class="w-full h-full object-cover" data-alt="A portrait of a young female prep cook looking focused, wearing a neat apron over a dark shirt in a well-lit modern prep kitchen. The color palette is bright with crisp whites and deep navy accents." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAX_7CkZzb6Fmh0JdoWR4cwDQoGHRdZsuzZW8Zn5mcMsn4Epf5o5iPB7mMH3AizzAiMdWDpFAIhMEG2mpH5wZbnh10nq5_pX18IVCAx9uRn9J-NkGsgyQrSl5Ip6jMnV0Su7Oxa9gwqRbLp4_GhJIfoqCNr_1u2fxGyPVJKalX1ZyxME9C1Z7eC4XiLbt0kyIA2F9G7J2PpQasDYbsLm2FyEgFdV1HDkBw2HzVno7jVmwMQcA4cEtyzgA"/>
+</div>
+<div>
+<div class="font-label-md text-label-md text-on-surface font-semibold">Sarah Chen</div>
+<div class="font-label-sm text-label-sm text-on-surface-variant">EMP-089 • Prep Cook</div>
+</div>
+</div>
+<button class="p-1 text-on-surface-variant">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+<div class="pl-2 grid grid-cols-2 gap-y-3 gap-x-2">
+<div>
+<div class="font-label-sm text-label-sm text-on-surface-variant mb-1">Department</div>
+<div class="font-body-md text-body-md text-on-surface">Prep Station</div>
+</div>
+<div>
+<div class="font-label-sm text-label-sm text-on-surface-variant mb-1">Status</div>
+<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-secondary-fixed text-on-secondary-fixed font-label-sm text-label-sm">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>Active
+                            </span>
+</div>
+<div class="col-span-2">
+<div class="font-label-sm text-label-sm text-on-surface-variant mb-1">Assigned Shift</div>
+<div class="font-body-md text-body-md text-on-surface">Morning (6AM - 2PM)</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>
