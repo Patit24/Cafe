@@ -2,26 +2,7 @@ import React from 'react';
 import Link from 'next/link';
 
 export default function ShiftsPage() {
-  const shifts = [
-    {
-      id: 1,
-      name: 'Standard Day Shift (12H)',
-      description: 'Default shift for regular kitchen staff',
-      startTime: '08:00 AM',
-      endTime: '08:00 PM',
-      graceLate: '15 mins',
-      graceEarly: '10 mins'
-    },
-    {
-      id: 2,
-      name: 'Night Shift (8H)',
-      description: 'Cleaning and prep staff',
-      startTime: '10:00 PM',
-      endTime: '06:00 AM',
-      graceLate: '10 mins',
-      graceEarly: '5 mins'
-    }
-  ];
+  const shifts: any[] = [];
 
   return (
     <div className="min-h-screen bg-surface-container-lowest text-on-surface p-8">

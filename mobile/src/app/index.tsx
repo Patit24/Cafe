@@ -2,31 +2,32 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, SafeAreaView, StyleSheet, Modal, FlatList, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 
-// Mock employee data for the UI
-const MOCK_EMPLOYEES = [
-  { id: '1', name: 'John Doe', role: 'Head Chef' },
-  { id: '2', name: 'Jane Smith', role: 'Sous Chef' },
-  { id: '3', name: 'Mike Johnson', role: 'Line Cook' },
-  { id: '4', name: 'Emily Davis', role: 'Pastry Chef' },
-  { id: '5', name: 'David Wilson', role: 'Dishwasher' },
-];
-
 export default function AttendanceHome() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [modalVisible, setModalVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [employees, setEmployees] = useState<any[]>([]);
   const router = useRouter();
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    
+    // Fetch employees
+    fetch('http://localhost:3001/employees')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) setEmployees(data);
+      })
+      .catch(err => console.error('Failed to fetch employees:', err));
+      
     return () => clearInterval(timer);
   }, []);
 
   const timeString = currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const dateString = currentTime.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
-  const filteredEmployees = MOCK_EMPLOYEES.filter(emp => 
-    emp.name.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredEmployees = employees.filter(emp => 
+    (emp.name || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const handleSelectEmployee = (employeeId: string) => {

@@ -43,11 +43,11 @@ export default function Dashboard() {
             </div>
             <div>
               <p className="text-sm text-gray-500 font-medium">Total Employees</p>
-              <h3 className="text-3xl font-bold text-gray-900 mt-1">124</h3>
+              <h3 className="text-3xl font-bold text-gray-900 mt-1">0</h3>
             </div>
           </div>
           <div className="mt-4 flex items-center justify-between">
-            <p className="text-xs text-gray-400">+4 this month</p>
+            <p className="text-xs text-gray-400">0 this month</p>
             {/* Mock Sparkline */}
             <svg className="w-16 h-6" viewBox="0 0 64 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M2 20L18 12L32 16L48 4L62 8" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -64,11 +64,11 @@ export default function Dashboard() {
             </div>
             <div>
               <p className="text-sm text-gray-500 font-medium">Present Today</p>
-              <h3 className="text-3xl font-bold text-gray-900 mt-1">98</h3>
+              <h3 className="text-3xl font-bold text-gray-900 mt-1">0</h3>
             </div>
           </div>
           <div className="mt-4 flex items-center justify-between">
-            <p className="text-xs text-gray-400">78.9% of total</p>
+            <p className="text-xs text-gray-400">0% of total</p>
             <svg className="w-16 h-6" viewBox="0 0 64 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M2 18L16 10L30 14L46 6L62 4" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
@@ -84,11 +84,11 @@ export default function Dashboard() {
             </div>
             <div>
               <p className="text-sm text-gray-500 font-medium">On Break</p>
-              <h3 className="text-3xl font-bold text-gray-900 mt-1">12</h3>
+              <h3 className="text-3xl font-bold text-gray-900 mt-1">0</h3>
             </div>
           </div>
           <div className="mt-4 flex items-center justify-between">
-            <p className="text-xs text-gray-400">9.7% of total</p>
+            <p className="text-xs text-gray-400">0% of total</p>
             <svg className="w-16 h-6" viewBox="0 0 64 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M2 12L14 16L28 8L42 18L62 4" stroke="#f97316" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
@@ -104,11 +104,11 @@ export default function Dashboard() {
             </div>
             <div>
               <p className="text-sm text-gray-500 font-medium">Absent</p>
-              <h3 className="text-3xl font-bold text-gray-900 mt-1">26</h3>
+              <h3 className="text-3xl font-bold text-gray-900 mt-1">0</h3>
             </div>
           </div>
           <div className="mt-4 flex items-center justify-between">
-            <p className="text-xs text-gray-400">20.9% of total</p>
+            <p className="text-xs text-gray-400">0% of total</p>
             <svg className="w-16 h-6" viewBox="0 0 64 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M2 8L16 16L30 10L46 20L62 12" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
@@ -191,104 +191,9 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {/* Row 1 */}
-              <tr className="hover:bg-gray-50 transition-colors bg-white">
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gray-200 overflow-hidden">
-                       <img src="https://i.pravatar.cc/150?u=a042581f4e29026704d" alt="Rahul Das" className="w-full h-full object-cover" />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-gray-900 flex items-center gap-1">
-                        Rahul Das <span className="w-3 h-3 bg-green-500 rounded-full flex items-center justify-center text-white text-[8px]">✓</span>
-                      </h4>
-                      <p className="text-xs text-gray-500">EMP-0012</p>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4">
-                  <span className="px-2.5 py-1 bg-purple-50 text-purple-600 text-xs font-semibold rounded-md border border-purple-100 inline-block mb-1">
-                    Kitchen Staff (12H)
-                  </span>
-                  <p className="text-xs text-gray-500">08:00 AM - 08:00 PM</p>
-                </td>
-                <td className="px-6 py-4">
-                  <p className="text-sm font-bold text-gray-900">08:03 AM</p>
-                  <p className="text-xs text-gray-500">31 Jul 2026</p>
-                </td>
-                <td className="px-6 py-4">
-                  <span className="flex items-center gap-1.5 px-2.5 py-1 bg-green-50 text-green-600 text-xs font-semibold rounded-full border border-green-100 w-max">
-                    <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-                    Working
-                  </span>
-                </td>
-                <td className="px-6 py-4">
-                  <p className="text-sm font-bold text-gray-900">06:42:15</p>
-                  <p className="text-xs text-gray-500">hrs</p>
-                </td>
-                <td className="px-6 py-4">
-                  <p className="text-sm font-bold text-gray-900">01:10:00</p>
-                  <p className="text-xs text-gray-500">hrs</p>
-                </td>
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-2">
-                    <button className="px-3 py-1.5 bg-gray-50 border border-gray-200 text-gray-600 text-xs font-semibold rounded-md hover:bg-gray-100">
-                      View Details
-                    </button>
-                    <button className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 border border-gray-200 rounded-md hover:bg-gray-50">
-                      <MoreVertical size={16} />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-              {/* Row 2 */}
-              <tr className="hover:bg-gray-50 transition-colors bg-white">
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gray-200 overflow-hidden">
-                       <img src="https://i.pravatar.cc/150?u=a042581f4e29026703d" alt="Amit Kumar" className="w-full h-full object-cover" />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-bold text-gray-900 flex items-center gap-1">
-                        Amit Kumar <span className="w-3 h-3 bg-orange-500 rounded-full flex items-center justify-center text-white text-[8px]">★</span>
-                      </h4>
-                      <p className="text-xs text-gray-500">EMP-0014</p>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4">
-                  <span className="px-2.5 py-1 bg-purple-50 text-purple-600 text-xs font-semibold rounded-md border border-purple-100 inline-block mb-1">
-                    Kitchen Staff (12H)
-                  </span>
-                  <p className="text-xs text-gray-500">08:00 AM - 08:00 PM</p>
-                </td>
-                <td className="px-6 py-4">
-                  <p className="text-sm font-bold text-gray-900">08:15 AM</p>
-                  <p className="text-xs text-gray-500">31 Jul 2026</p>
-                </td>
-                <td className="px-6 py-4">
-                  <span className="flex items-center gap-1.5 px-2.5 py-1 bg-orange-50 text-orange-600 text-xs font-semibold rounded-full border border-orange-100 w-max">
-                    <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span>
-                    On Break
-                  </span>
-                </td>
-                <td className="px-6 py-4">
-                  <p className="text-sm font-bold text-gray-900">04:25:30</p>
-                  <p className="text-xs text-gray-500">hrs</p>
-                </td>
-                <td className="px-6 py-4">
-                  <p className="text-sm font-bold text-gray-900">00:45:20</p>
-                  <p className="text-xs text-gray-500">hrs</p>
-                </td>
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-2">
-                    <button className="px-3 py-1.5 bg-gray-50 border border-gray-200 text-gray-600 text-xs font-semibold rounded-md hover:bg-gray-100">
-                      View Details
-                    </button>
-                    <button className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 border border-gray-200 rounded-md hover:bg-gray-50">
-                      <MoreVertical size={16} />
-                    </button>
-                  </div>
+              <tr className="bg-white">
+                <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
+                  No active staff currently.
                 </td>
               </tr>
             </tbody>
@@ -305,7 +210,7 @@ export default function Dashboard() {
           </div>
           <div>
             <p className="text-xs text-gray-500 font-medium">Total Work Hours</p>
-            <h4 className="text-xl font-bold text-gray-900 mt-0.5">386h 45m</h4>
+            <h4 className="text-xl font-bold text-gray-900 mt-0.5">0h 0m</h4>
             <p className="text-xs text-gray-400 mt-1">Today</p>
           </div>
         </div>
@@ -317,7 +222,7 @@ export default function Dashboard() {
           </div>
           <div>
             <p className="text-xs text-gray-500 font-medium">Overtime Hours</p>
-            <h4 className="text-xl font-bold text-gray-900 mt-0.5">24h 30m</h4>
+            <h4 className="text-xl font-bold text-gray-900 mt-0.5">0h 0m</h4>
             <p className="text-xs text-gray-400 mt-1">Today</p>
           </div>
         </div>
@@ -329,7 +234,7 @@ export default function Dashboard() {
           </div>
           <div>
             <p className="text-xs text-gray-500 font-medium">Late Arrivals</p>
-            <h4 className="text-xl font-bold text-gray-900 mt-0.5">8</h4>
+            <h4 className="text-xl font-bold text-gray-900 mt-0.5">0</h4>
             <p className="text-xs text-gray-400 mt-1">Today</p>
           </div>
         </div>
@@ -341,7 +246,7 @@ export default function Dashboard() {
           </div>
           <div>
             <p className="text-xs text-gray-500 font-medium">Early Departures</p>
-            <h4 className="text-xl font-bold text-gray-900 mt-0.5">3</h4>
+            <h4 className="text-xl font-bold text-gray-900 mt-0.5">0</h4>
             <p className="text-xs text-gray-400 mt-1">Today</p>
           </div>
         </div>
@@ -353,7 +258,7 @@ export default function Dashboard() {
           </div>
           <div>
             <p className="text-xs text-gray-500 font-medium">Completed Shifts</p>
-            <h4 className="text-xl font-bold text-gray-900 mt-0.5">85</h4>
+            <h4 className="text-xl font-bold text-gray-900 mt-0.5">0</h4>
             <p className="text-xs text-gray-400 mt-1">Today</p>
           </div>
         </div>
