@@ -33,34 +33,6 @@ export default function EmployeesPage() {
     ));
   };
 
-  const handleSaveEmployee = async () => {
-    if (!newEmployee.name) return;
-
-    const newCode = `EMP-${Math.floor(Math.random() * 900) + 100}`;
-    const rateStr = newEmployee.baseRate.replace(/[^0-9.]/g, '');
-    const rate = parseFloat(rateStr) || 15.00;
-
-    const payload = {
-      employeeCode: newCode,
-      name: newEmployee.name,
-      salaryType: 'hourly',
-      salaryRate: rate,
-      isActive: true
-    };
-
-    try {
-      await fetch('http://localhost:3001/employees', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      fetchEmployees();
-      setNewEmployee({ name: '', role: '', baseRate: '' });
-      setIsModalOpen(false);
-    } catch (err) {
-      console.error(err);
-    }
-  };
 
   return (
     <div className="min-h-screen bg-surface-container-lowest text-on-surface p-8 relative">
