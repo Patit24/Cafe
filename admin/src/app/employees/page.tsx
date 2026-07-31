@@ -7,7 +7,7 @@ export default function EmployeesPage() {
 
   const fetchEmployees = async () => {
     try {
-      const res = await fetch('http://localhost:3001/employees');
+      const res = await fetch('http://localhost:8000/employees');
       const data = await res.json();
       if (Array.isArray(data)) setEmployees(data);
     } catch (err) {

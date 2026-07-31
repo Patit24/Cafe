@@ -13,7 +13,7 @@ export default function NewEmployeePage() {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSaveEmployee = async () => {
+  const handleSaveEmployee = async (redirectToFaces = false) => {
     if (!newEmployee.name) return;
     setIsSubmitting(true);
 
@@ -30,12 +30,18 @@ export default function NewEmployeePage() {
     };
 
     try {
-      await fetch('http://localhost:3001/employees', {
+      const res = await fetch('http://localhost:8000/employees', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      router.push('/employees');
+      const data = await res.json();
+      
+      if (redirectToFaces && data?.id) {
+        router.push(`/employees/${data.id}/faces`);
+      } else {
+        router.push('/employees');
+      }
     } catch (err) {
       console.error(err);
       setIsSubmitting(false);
@@ -103,19 +109,26 @@ export default function NewEmployeePage() {
             </div>
           </div>
 
-          <div className="flex justify-end gap-4 mt-4">
+          <div className="flex flex-wrap justify-end gap-3 mt-4">
             <Link 
               href="/employees"
-              className="px-6 py-3 text-on-surface-variant hover:text-on-surface font-medium"
+              className="px-5 py-2.5 text-on-surface-variant hover:text-on-surface font-medium"
             >
               Cancel
             </Link>
             <button 
-              onClick={handleSaveEmployee}
+              onClick={() => handleSaveEmployee(false)}
               disabled={isSubmitting}
-              className="bg-primary text-on-primary px-8 py-3 rounded-md font-medium hover:opacity-90 disabled:opacity-50"
+              className="bg-surface-container-high text-on-surface px-5 py-2.5 rounded-md font-medium hover:opacity-90 disabled:opacity-50"
             >
               {isSubmitting ? 'Saving...' : 'Save Employee'}
+            </button>
+            <button 
+              onClick={() => handleSaveEmployee(true)}
+              disabled={isSubmitting}
+              className="bg-purple-600 text-white px-5 py-2.5 rounded-md font-medium hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2"
+            >
+              📸 Save & Add Face Profile
             </button>
           </div>
         </div>
