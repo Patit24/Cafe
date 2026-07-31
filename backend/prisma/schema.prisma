@@ -100,7 +100,9 @@ model EmployeeFace {
   id            String    @id @default(uuid()) @db.Uuid
   employeeId    String?   @map("employee_id") @db.Uuid
   employee      Employee? @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  faceEmbedding Json      @map("face_embedding")
+  imageUrl      String?   @map("image_url")
+  angle         String?   @db.VarChar(50)
+  faceEmbedding Json?     @map("face_embedding")
   createdAt     DateTime  @default(now()) @db.Timestamptz
 
   @@map("employee_faces")

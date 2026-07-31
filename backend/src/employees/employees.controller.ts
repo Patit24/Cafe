@@ -31,4 +31,19 @@ export class EmployeesController {
   remove(@Param('id') id: string) {
     return this.employeesService.remove(id);
   }
+
+  @Post(':id/faces')
+  addFace(@Param('id') id: string, @Body() faceData: any) {
+    return this.employeesService.addFace(id, faceData);
+  }
+
+  @Get(':id/faces')
+  getFaces(@Param('id') id: string) {
+    return this.employeesService.getFaces(id);
+  }
+
+  @Delete('faces/:faceId')
+  removeFace(@Param('faceId') faceId: string) {
+    return this.employeesService.removeFace(faceId);
+  }
 }

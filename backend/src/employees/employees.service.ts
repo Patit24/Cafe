@@ -38,4 +38,28 @@ export class EmployeesService {
       where: { id },
     });
   }
+
+  addFace(employeeId: string, faceData: any) {
+    return this.prisma.employeeFace.create({
+      data: {
+        employeeId,
+        imageUrl: faceData.imageUrl,
+        angle: faceData.angle,
+        faceEmbedding: faceData.faceEmbedding || null,
+      },
+    });
+  }
+
+  getFaces(employeeId: string) {
+    return this.prisma.employeeFace.findMany({
+      where: { employeeId },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  removeFace(faceId: string) {
+    return this.prisma.employeeFace.delete({
+      where: { id: faceId },
+    });
+  }
 }

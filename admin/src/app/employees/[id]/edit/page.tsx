@@ -71,11 +71,19 @@ export default function EditEmployeePage() {
   return (
     <div className="min-h-screen bg-surface-container-lowest text-on-surface p-8 relative">
       <header className="flex justify-between items-center mb-8 border-b border-outline-variant pb-4">
-        <div>
-          <h1 className="text-display-sm font-bold text-primary">Edit Employee</h1>
-          <p className="text-body-md text-on-surface-variant">Update staff details.</p>
+        <div className="flex justify-between items-center w-full">
+          <div>
+            <h1 className="text-display-sm font-bold text-primary">Edit Employee</h1>
+            <p className="text-body-md text-on-surface-variant">Update staff details.</p>
+          </div>
+          <button 
+            onClick={() => router.push(`/employees/${params.id}/faces`)}
+            className="bg-purple-600 text-white px-5 py-2.5 rounded-lg text-sm font-semibold hover:bg-purple-700 transition-colors shadow-sm flex items-center gap-2"
+          >
+            Manage Face Profiles
+          </button>
         </div>
-        <Link href="/employees" className="bg-surface-container-high text-on-surface px-6 py-3 rounded text-label-md">
+        <Link href="/employees" className="bg-surface-container-high text-on-surface px-6 py-3 rounded text-label-md ml-4">
           Back to Employees
         </Link>
       </header>
