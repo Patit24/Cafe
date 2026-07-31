@@ -1,13 +1,14 @@
 'use client';
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { API_BASE_URL } from '@/lib/api';
 
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<any[]>([]);
 
   const fetchEmployees = async () => {
     try {
-      const res = await fetch('http://localhost:8000/employees');
+      const res = await fetch(`${API_BASE_URL}/employees`);
       const data = await res.json();
       if (Array.isArray(data)) setEmployees(data);
     } catch (err) {

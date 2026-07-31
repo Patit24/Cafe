@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Camera, Upload, X, Loader2 } from 'lucide-react';
 import { storage } from '@/lib/firebase';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
+import { API_BASE_URL } from '@/lib/api';
 
 export default function NewEmployeePage() {
   const router = useRouter();
@@ -60,8 +61,7 @@ export default function NewEmployeePage() {
     };
 
     try {
-      const apiHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
-      const res = await fetch(`http://${apiHost}:8000/employees`, {
+      const res = await fetch(`${API_BASE_URL}/employees`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -80,7 +80,7 @@ export default function NewEmployeePage() {
               await uploadString(storageRef, photoData, 'data_url');
               const downloadURL = await getDownloadURL(storageRef);
 
-              await fetch(`http://${apiHost}:8000/employees/${createdEmp.id}/faces`, {
+              await fetch(`${API_BASE_URL}/employees/${createdEmp.id}/faces`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

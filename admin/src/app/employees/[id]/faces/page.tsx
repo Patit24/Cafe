@@ -5,6 +5,7 @@ import Webcam from 'react-webcam';
 import { Camera, Save, ArrowLeft, Trash2, Loader2, AlertCircle } from 'lucide-react';
 import { storage } from '@/lib/firebase';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
+import { API_BASE_URL } from '@/lib/api';
 
 export default function FacialRegistrationPage({ params }: { params: { id: string } }) {
   const router = useRouter();
@@ -26,8 +27,8 @@ export default function FacialRegistrationPage({ params }: { params: { id: strin
   const fetchEmployeeAndFaces = async () => {
     try {
       const [empRes, faceRes] = await Promise.all([
-        fetch(`http://localhost:8000/employees/${params.id}`),
-        fetch(`http://localhost:8000/employees/${params.id}/faces`)
+        fetch(`${API_BASE_URL}/employees/${params.id}`),
+        fetch(`${API_BASE_URL}/employees/${params.id}/faces`)
       ]);
       const empData = await empRes.json();
       const faceData = await faceRes.json();
@@ -59,7 +60,7 @@ export default function FacialRegistrationPage({ params }: { params: { id: strin
       const downloadURL = await getDownloadURL(storageRef);
 
       // Save to Database
-      await fetch(`http://localhost:8000/employees/${params.id}/faces`, {
+      await fetch(`${API_BASE_URL}/employees/${params.id}/faces`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -82,7 +83,7 @@ export default function FacialRegistrationPage({ params }: { params: { id: strin
   const deleteFace = async (faceId: string) => {
     if (!confirm('Are you sure you want to delete this face profile?')) return;
     try {
-      await fetch(`http://localhost:8000/employees/faces/${faceId}`, {
+      await fetch(`${API_BASE_URL}/employees/faces/${faceId}`, {
         method: 'DELETE'
       });
       fetchEmployeeAndFaces();
