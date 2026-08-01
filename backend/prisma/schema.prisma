@@ -91,6 +91,8 @@ model AttendanceRecord {
   overtimeMinutes         Int?              @default(0) @map("overtime_minutes")
   penaltyDeductionMinutes Int?              @default(0) @map("penalty_deduction_minutes")
   faceMatchScore          Decimal?          @map("face_match_score") @db.Decimal(5, 2)
+  photoUrl                String?           @map("photo_url")
+  livenessPassed          Boolean?          @default(true) @map("liveness_passed")
   status                  AttendanceStatus  @default(working)
   deviceId                String?           @map("device_id") @db.VarChar(255)
   gpsLocation             String?           @map("gps_location") @db.VarChar(255)
