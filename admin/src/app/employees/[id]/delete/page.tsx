@@ -1,4 +1,5 @@
 'use client';
+import { API_BASE_URL } from '@/lib/api';
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
@@ -15,7 +16,7 @@ export default function DeleteEmployeePage() {
   useEffect(() => {
     const fetchEmployee = async () => {
       try {
-        const res = await fetch(`http://localhost:3001/employees/${id}`);
+        const res = await fetch(`${API_BASE_URL}/employees/${id}`);
         if (!res.ok) throw new Error('Failed to fetch');
         const data = await res.json();
         setEmployee(data);
@@ -31,7 +32,7 @@ export default function DeleteEmployeePage() {
   const handleDeleteEmployee = async () => {
     setIsDeleting(true);
     try {
-      await fetch(`http://localhost:3001/employees/${id}`, {
+      await fetch(`${API_BASE_URL}/employees/${id}`, {
         method: 'DELETE',
       });
       router.push('/employees');

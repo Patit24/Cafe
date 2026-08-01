@@ -1,11 +1,43 @@
+import {
+  IsDateString,
+  IsEnum,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+} from 'class-validator';
+
+export enum LeaveTypeDto {
+  paid = 'paid',
+  unpaid = 'unpaid',
+}
+
+export enum LeaveStatusDto {
+  pending = 'pending',
+  approved = 'approved',
+  rejected = 'rejected',
+}
+
 export class CreateLeaveDto {
-  employeeId: string;
-  startDate: string;
-  endDate: string;
-  reason: string;
-  type: 'paid' | 'unpaid';
+  @IsUUID()
+  employeeId!: string;
+
+  @IsDateString()
+  startDate!: string;
+
+  @IsDateString()
+  endDate!: string;
+
+  @IsString()
+  @MaxLength(2000)
+  reason!: string;
+
+  @IsEnum(LeaveTypeDto)
+  type!: LeaveTypeDto;
 }
 
 export class UpdateLeaveDto {
-  status: 'pending' | 'approved' | 'rejected';
+  @IsOptional()
+  @IsEnum(LeaveStatusDto)
+  status?: LeaveStatusDto;
 }

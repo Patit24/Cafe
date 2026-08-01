@@ -1,4 +1,5 @@
 'use client';
+import { API_BASE_URL } from '@/lib/api';
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
@@ -20,7 +21,7 @@ export default function EditEmployeePage() {
   useEffect(() => {
     const fetchEmployee = async () => {
       try {
-        const res = await fetch(`http://localhost:3001/employees/${id}`);
+        const res = await fetch(`${API_BASE_URL}/employees/${id}`);
         if (!res.ok) throw new Error('Failed to fetch');
         const data = await res.json();
         setEmployee({
@@ -52,7 +53,7 @@ export default function EditEmployeePage() {
     };
 
     try {
-      await fetch(`http://localhost:3001/employees/${id}`, {
+      await fetch(`${API_BASE_URL}/employees/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

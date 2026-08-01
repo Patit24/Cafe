@@ -1,27 +1,19 @@
-// Import the functions you need from the SDKs you need
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAnalytics, isSupported } from "firebase/analytics";
 import { getStorage } from "firebase/storage";
 
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
-
-// Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyDGxGnFqkl88wpJo-B-S5wQ4qVXDZ91rbE",
-  authDomain: "evening-light-bcc3b.firebaseapp.com",
-  projectId: "evening-light-bcc3b",
-  storageBucket: "evening-light-bcc3b.firebasestorage.app",
-  messagingSenderId: "563146815032",
-  appId: "1:563146815032:web:d1475058ee9c0ec95c58cd",
-  measurementId: "G-ZVWE7R4T60"
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "demo-api-key",
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "demo-app.firebaseapp.com",
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "demo-app",
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "demo-app.appspot.com",
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "123456789",
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:123456789:web:123456",
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || "G-123456",
 };
 
-// Initialize Firebase
-// Ensure that we only initialize once, especially in Next.js (SSR)
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-// Only initialize analytics on the client side where supported
 let analytics;
 if (typeof window !== "undefined") {
   isSupported().then((supported) => {

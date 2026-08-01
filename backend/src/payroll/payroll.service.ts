@@ -1,12 +1,19 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
+import { PayrollStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class PayrollService {
   constructor(private prisma: PrismaService) {}
 
-  async generatePayroll(employeeId: string, periodStart: Date, periodEnd: Date) {
-    const employee = await this.prisma.employee.findUnique({ where: { id: employeeId } });
+  async generatePayroll(
+    employeeId: string,
+    periodStart: Date,
+    periodEnd: Date,
+  ) {
+    const employee = await this.prisma.employee.findUnique({
+      where: { id: employeeId },
+    });
     if (!employee) throw new BadRequestException('Employee not found');
 
     const attendances = await this.prisma.attendanceRecord.findMany({
@@ -49,19 +56,15 @@ export class PayrollService {
     let unauthorizedAbsenceDays = 0;
     const current = new Date(periodStart);
     while (current <= periodEnd) {
-      const isWeekend = current.getDay() === 0 || current.getDay() === 6; // Skip weekends if needed, or don't. The user didn't specify, so let's skip weekends. Wait, I told the user I'd assume 30 days unless specified. The user approved. Let's assume everyday is a working day, but commonly weekends are off. Let's just assume all days are expected for now, or just calculate based on total days in period. Actually, the user approved "assume a 30-day continuous working month".
-      
       const dateStr = current.toISOString().split('T')[0];
-      const hasAttendance = attendances.some(a => a.date.toISOString().split('T')[0] === dateStr);
-      
+      const hasAttendance = attendances.some(
+        (a) => a.date.toISOString().split('T')[0] === dateStr,
+      );
+
       let hasLeave = false;
-      let isPaidLeave = false;
       for (const leave of leaves) {
         if (current >= leave.startDate && current <= leave.endDate) {
           hasLeave = true;
-          if (leave.type === 'paid') {
-            isPaidLeave = true;
-          }
           break;
         }
       }
@@ -75,25 +78,33 @@ export class PayrollService {
     if (employee.salaryType === 'hourly') {
       baseSalary = totalWorkingHours * Number(employee.salaryRate);
       overtimePay = totalOvertimeHours * Number(employee.overtimeRate);
-      penaltyDeductions = (totalPenaltyMinutes / 60) * Number(employee.salaryRate);
+      penaltyDeductions =
+        (totalPenaltyMinutes / 60) * Number(employee.salaryRate);
       unauthorizedAbsenceDeductions = 0; // Hourly employees don't get deducted for not working, they just don't get paid.
     } else if (employee.salaryType === 'daily') {
       const daysWorked = attendances.length;
       baseSalary = daysWorked * Number(employee.salaryRate);
-      
+
       // Add paid leaves to base salary
       const paidLeaveDays = leaves.reduce((total, leave) => {
         if (leave.type === 'paid') {
           // Calculate overlap
-          const start = new Date(Math.max(leave.startDate.getTime(), periodStart.getTime()));
-          const end = new Date(Math.min(leave.endDate.getTime(), periodEnd.getTime()));
-          const days = Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+          const start = new Date(
+            Math.max(leave.startDate.getTime(), periodStart.getTime()),
+          );
+          const end = new Date(
+            Math.min(leave.endDate.getTime(), periodEnd.getTime()),
+          );
+          const days =
+            Math.floor(
+              (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24),
+            ) + 1;
           return total + (days > 0 ? days : 0);
         }
         return total;
       }, 0);
       baseSalary += paidLeaveDays * Number(employee.salaryRate);
-      
+
       overtimePay = totalOvertimeHours * Number(employee.overtimeRate);
       const hourlyEquivalent = Number(employee.salaryRate) / 8;
       penaltyDeductions = (totalPenaltyMinutes / 60) * hourlyEquivalent;
@@ -103,12 +114,16 @@ export class PayrollService {
       overtimePay = totalOvertimeHours * Number(employee.overtimeRate);
       const hourlyEquivalent = Number(employee.salaryRate) / 240;
       penaltyDeductions = (totalPenaltyMinutes / 60) * hourlyEquivalent;
-      
+
       const dailyEquivalent = Number(employee.salaryRate) / 30; // Assuming 30 days
       unauthorizedAbsenceDeductions = unauthorizedAbsenceDays * dailyEquivalent;
     }
 
-    const netSalary = baseSalary + overtimePay - penaltyDeductions - unauthorizedAbsenceDeductions;
+    const netSalary =
+      baseSalary +
+      overtimePay -
+      penaltyDeductions -
+      unauthorizedAbsenceDeductions;
 
     return this.prisma.payrollEntry.create({
       data: {
@@ -126,7 +141,7 @@ export class PayrollService {
     });
   }
 
-  async updateStatus(id: string, status: any) {
+  async updateStatus(id: string, status: PayrollStatus) {
     return this.prisma.payrollEntry.update({
       where: { id },
       data: { status },
@@ -138,6 +153,9 @@ export class PayrollService {
   }
 
   findOne(id: string) {
-    return this.prisma.payrollEntry.findUnique({ where: { id }, include: { employee: true } });
+    return this.prisma.payrollEntry.findUnique({
+      where: { id },
+      include: { employee: true },
+    });
   }
 }

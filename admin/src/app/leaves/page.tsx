@@ -1,4 +1,5 @@
 'use client';
+import { API_BASE_URL } from '@/lib/api';
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 
@@ -18,7 +19,7 @@ export default function LeavesPage() {
 
   const fetchLeaves = async () => {
     try {
-      const res = await fetch('http://localhost:3001/leaves');
+      const res = await fetch(API_BASE_URL + '/leaves');
       const data = await res.json();
       if (Array.isArray(data)) setLeaves(data);
     } catch (err) {
@@ -28,7 +29,7 @@ export default function LeavesPage() {
 
   const fetchEmployees = async () => {
     try {
-      const res = await fetch('http://localhost:3001/employees');
+      const res = await fetch(API_BASE_URL + '/employees');
       const data = await res.json();
       if (Array.isArray(data)) setEmployees(data);
     } catch (err) {
@@ -46,7 +47,7 @@ export default function LeavesPage() {
     setIsSubmitting(true);
 
     try {
-      await fetch('http://localhost:3001/leaves', {
+      await fetch(API_BASE_URL + '/leaves', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newLeave)
@@ -70,7 +71,7 @@ export default function LeavesPage() {
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this leave?')) return;
     try {
-      await fetch(`http://localhost:3001/leaves/${id}`, { method: 'DELETE' });
+      await fetch(`${API_BASE_URL}/leaves/${id}`, { method: 'DELETE' });
       fetchLeaves();
     } catch (err) {
       console.error(err);

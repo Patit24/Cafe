@@ -1,18 +1,33 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
-import { CreateAttendanceDto } from './dto/create-attendance.dto';
-import { UpdateAttendanceDto } from './dto/update-attendance.dto';
 import { PrismaService } from '../prisma/prisma.service';
+
+type LatePenaltyRule = {
+  lateMinutes: number;
+  deductHours: number;
+};
 
 @Injectable()
 export class AttendanceService {
   constructor(private prisma: PrismaService) {}
 
-  async checkIn(employeeId: string, deviceId: string, gpsLocation: string, faceMatchScore: number) {
+  async checkIn(
+    employeeId: string,
+    deviceId: string,
+    gpsLocation: string,
+    faceMatchScore: number,
+    photoUrl?: string,
+    livenessPassed: boolean = true,
+  ) {
     if (faceMatchScore < 85) {
-      throw new BadRequestException('Face verification failed. Please try again.');
+      throw new BadRequestException(
+        'Face verification failed. Score below 85% threshold.',
+      );
     }
 
-    const employee = await this.prisma.employee.findUnique({ where: { id: employeeId }, include: { shift: true } });
+    const employee = await this.prisma.employee.findUnique({
+      where: { id: employeeId },
+      include: { shift: true },
+    });
     if (!employee) throw new BadRequestException('Employee not found');
 
     const today = new Date();
@@ -23,33 +38,33 @@ export class AttendanceService {
     });
 
     if (existingRecord) {
-      throw new BadRequestException('Duplicate check-in for today is not allowed.');
+      throw new BadRequestException(
+        'Duplicate check-in for today is not allowed.',
+      );
     }
 
     const checkInTime = new Date();
     let penaltyDeductionMinutes = 0;
 
     if (employee.shift && employee.shift.startTime) {
-      // Shift startTime is a Date object representing the time portion in UTC (1970-01-01)
       const shiftStart = new Date(checkInTime);
       shiftStart.setHours(
         employee.shift.startTime.getUTCHours(),
         employee.shift.startTime.getUTCMinutes(),
         0,
-        0
+        0,
       );
 
       const diffMs = checkInTime.getTime() - shiftStart.getTime();
       const diffMinutes = Math.floor(diffMs / 60000);
 
       if (diffMinutes > 0) {
-        // Parse penalty rules from DB, or use the default requirement
-        const rules = (employee.shift.latePenaltyRules as any[]) || [
+        const rules = (employee.shift.latePenaltyRules as
+          LatePenaltyRule[] | null) || [
           { lateMinutes: 30, deductHours: 2 },
-          { lateMinutes: 10, deductHours: 1 }
+          { lateMinutes: 10, deductHours: 1 },
         ];
 
-        // Sort rules descending by lateMinutes to apply the highest penalty first
         rules.sort((a, b) => b.lateMinutes - a.lateMinutes);
 
         for (const rule of rules) {
@@ -70,6 +85,8 @@ export class AttendanceService {
         deviceId,
         gpsLocation,
         faceMatchScore,
+        photoUrl: photoUrl || null,
+        livenessPassed: livenessPassed ?? true,
         status: 'working',
         penaltyDeductionMinutes,
       },
@@ -77,8 +94,11 @@ export class AttendanceService {
   }
 
   async startBreak(recordId: string) {
-    const record = await this.prisma.attendanceRecord.findUnique({ where: { id: recordId } });
-    if (!record || record.status !== 'working') throw new BadRequestException('Cannot start break right now');
+    const record = await this.prisma.attendanceRecord.findUnique({
+      where: { id: recordId },
+    });
+    if (!record || record.status !== 'working')
+      throw new BadRequestException('Cannot start break right now');
 
     await this.prisma.attendanceRecord.update({
       where: { id: recordId },
@@ -107,7 +127,7 @@ export class AttendanceService {
 
   async checkOut(recordId: string) {
     const checkOutTime = new Date();
-    
+
     // In a real scenario, this would calculate actual net working minutes and overtime
     return this.prisma.attendanceRecord.update({
       where: { id: recordId },
@@ -119,10 +139,15 @@ export class AttendanceService {
   }
 
   findAll() {
-    return this.prisma.attendanceRecord.findMany({ include: { employee: true, shift: true, breaks: true } });
+    return this.prisma.attendanceRecord.findMany({
+      include: { employee: true, shift: true, breaks: true },
+    });
   }
 
   findOne(id: string) {
-    return this.prisma.attendanceRecord.findUnique({ where: { id }, include: { employee: true, shift: true, breaks: true } });
+    return this.prisma.attendanceRecord.findUnique({
+      where: { id },
+      include: { employee: true, shift: true, breaks: true },
+    });
   }
 }

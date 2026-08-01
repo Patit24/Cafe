@@ -38,7 +38,7 @@ export class LeavesService {
   async update(id: string, updateLeaveDto: UpdateLeaveDto) {
     return this.prisma.leaveApplication.update({
       where: { id },
-      data: { status: updateLeaveDto.status },
+      data: updateLeaveDto.status ? { status: updateLeaveDto.status } : {},
       include: { employee: true },
     });
   }

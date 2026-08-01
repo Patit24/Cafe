@@ -44,6 +44,7 @@ model Department {
   roles     Role[]
   employees Employee[]
 
+  @@unique([name])
   @@map("departments")
 }
 
@@ -55,6 +56,7 @@ model Role {
   createdAt    DateTime    @default(now()) @db.Timestamptz
   employees    Employee[]
 
+  @@unique([departmentId, name])
   @@map("roles")
 }
 
@@ -70,6 +72,7 @@ model ShiftTemplate {
   employees        Employee[]
   attendances      AttendanceRecord[]
 
+  @@unique([name])
   @@map("shift_templates")
 }
 
@@ -105,6 +108,7 @@ model EmployeeFace {
   faceEmbedding Json?     @map("face_embedding")
   createdAt     DateTime  @default(now()) @db.Timestamptz
 
+  @@index([employeeId])
   @@map("employee_faces")
 }
 
@@ -126,9 +130,13 @@ model AttendanceRecord {
   status                  AttendanceStatus  @default(working)
   deviceId                String?           @map("device_id") @db.VarChar(255)
   gpsLocation             String?           @map("gps_location") @db.VarChar(255)
+  photoUrl                String?           @map("photo_url")
+  livenessPassed          Boolean?          @default(true) @map("liveness_passed")
   createdAt               DateTime          @default(now()) @db.Timestamptz
   breaks                  AttendanceBreak[]
 
+  @@unique([employeeId, date])
+  @@index([date])
   @@map("attendance_records")
 }
 
@@ -140,6 +148,7 @@ model AttendanceBreak {
   endTime            DateTime?         @map("end_time") @db.Timestamptz
   createdAt          DateTime          @default(now()) @db.Timestamptz
 
+  @@index([attendanceRecordId])
   @@map("attendance_breaks")
 }
 
@@ -160,6 +169,8 @@ model PayrollEntry {
   status             PayrollStatus @default(generated)
   createdAt          DateTime      @default(now()) @db.Timestamptz
 
+  @@unique([employeeId, periodStart, periodEnd])
+  @@index([periodStart, periodEnd])
   @@map("payroll_entries")
 }
 
@@ -186,5 +197,6 @@ model LeaveApplication {
   type       LeaveType   @default(unpaid)
   createdAt  DateTime    @default(now()) @db.Timestamptz
 
+  @@index([employeeId, startDate, endDate])
   @@map("leave_applications")
 }

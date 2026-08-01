@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, SafeAreaView, StyleSheet, Modal, FlatList, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
+import { API_BASE_URL } from '@/lib/api';
 
 export default function AttendanceHome() {
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -13,7 +14,7 @@ export default function AttendanceHome() {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     
     // Fetch employees
-    fetch('http://localhost:3001/employees')
+    fetch(`${API_BASE_URL}/employees`)
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) setEmployees(data);
@@ -91,7 +92,7 @@ export default function AttendanceHome() {
                   onPress={() => handleSelectEmployee(item.id)}
                 >
                   <Text style={styles.employeeName}>{item.name}</Text>
-                  <Text style={styles.employeeRole}>{item.role}</Text>
+                  <Text style={styles.employeeRole}>{item.role?.name || 'Kitchen Staff'}</Text>
                 </TouchableOpacity>
               )}
               ListEmptyComponent={

@@ -1,4 +1,5 @@
 'use client';
+import { API_BASE_URL } from '@/lib/api';
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 
@@ -12,7 +13,7 @@ export default function PayrollPage() {
 
   const fetchPayroll = async () => {
     try {
-      const response = await fetch('http://localhost:3001/payroll');
+      const response = await fetch(API_BASE_URL + '/payroll');
       const data = await response.json();
       if (Array.isArray(data)) {
         setPayrollRecords(data);
@@ -29,7 +30,7 @@ export default function PayrollPage() {
 
   const handleMarkAsPaid = async (id: string) => {
     try {
-      await fetch(`http://localhost:3001/payroll/${id}/status`, {
+      await fetch(`${API_BASE_URL}/payroll/${id}/status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'paid' }),

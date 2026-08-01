@@ -1,16 +1,18 @@
 import { Controller, Get, Post, Body, Param } from '@nestjs/common';
 import { PayrollService } from './payroll.service';
+import { CreatePayrollDto } from './dto/create-payroll.dto';
+import { UpdatePayrollDto } from './dto/update-payroll.dto';
 
 @Controller('payroll')
 export class PayrollController {
   constructor(private readonly payrollService: PayrollService) {}
 
   @Post('generate')
-  generatePayroll(@Body() body: { employeeId: string; periodStart: string; periodEnd: string }) {
+  generatePayroll(@Body() body: CreatePayrollDto) {
     return this.payrollService.generatePayroll(
       body.employeeId,
       new Date(body.periodStart),
-      new Date(body.periodEnd)
+      new Date(body.periodEnd),
     );
   }
 
@@ -25,7 +27,7 @@ export class PayrollController {
   }
 
   @Post(':id/status')
-  updateStatus(@Param('id') id: string, @Body() body: { status: string }) {
+  updateStatus(@Param('id') id: string, @Body() body: UpdatePayrollDto) {
     return this.payrollService.updateStatus(id, body.status);
   }
 }

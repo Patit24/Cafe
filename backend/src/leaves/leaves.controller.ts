@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+} from '@nestjs/common';
 import { LeavesService } from './leaves.service';
 import { CreateLeaveDto, UpdateLeaveDto } from './dto/create-leave.dto';
 

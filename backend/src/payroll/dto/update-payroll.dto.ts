@@ -1,4 +1,12 @@
-import { PartialType } from '@nestjs/mapped-types';
-import { CreatePayrollDto } from './create-payroll.dto';
+import { IsEnum } from 'class-validator';
 
-export class UpdatePayrollDto extends PartialType(CreatePayrollDto) {}
+export enum PayrollStatusDto {
+  generated = 'generated',
+  locked = 'locked',
+  paid = 'paid',
+}
+
+export class UpdatePayrollDto {
+  @IsEnum(PayrollStatusDto)
+  status!: PayrollStatusDto;
+}

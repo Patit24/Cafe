@@ -1,7 +1,14 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { PrismaService } from '../prisma/prisma.service';
+
+export type EmployeeFacePayload = {
+  imageUrl?: string;
+  angle?: string;
+  faceEmbedding?: number[];
+};
 
 @Injectable()
 export class EmployeesService {
@@ -9,27 +16,27 @@ export class EmployeesService {
 
   create(createEmployeeDto: CreateEmployeeDto) {
     return this.prisma.employee.create({
-      data: createEmployeeDto as any,
+      data: createEmployeeDto,
     });
   }
 
   findAll() {
     return this.prisma.employee.findMany({
-      include: { department: true, role: true, shift: true },
+      include: { department: true, role: true, shift: true, faces: true },
     });
   }
 
   findOne(id: string) {
     return this.prisma.employee.findUnique({
       where: { id },
-      include: { department: true, role: true, shift: true },
+      include: { department: true, role: true, shift: true, faces: true },
     });
   }
 
   update(id: string, updateEmployeeDto: UpdateEmployeeDto) {
     return this.prisma.employee.update({
       where: { id },
-      data: updateEmployeeDto as any,
+      data: updateEmployeeDto,
     });
   }
 
@@ -39,13 +46,13 @@ export class EmployeesService {
     });
   }
 
-  addFace(employeeId: string, faceData: any) {
+  addFace(employeeId: string, faceData: EmployeeFacePayload) {
     return this.prisma.employeeFace.create({
       data: {
         employeeId,
         imageUrl: faceData.imageUrl,
         angle: faceData.angle,
-        faceEmbedding: faceData.faceEmbedding || null,
+        faceEmbedding: faceData.faceEmbedding ?? Prisma.JsonNull,
       },
     });
   }

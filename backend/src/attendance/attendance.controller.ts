@@ -1,13 +1,21 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param } from '@nestjs/common';
 import { AttendanceService } from './attendance.service';
+import { CreateAttendanceDto } from './dto/create-attendance.dto';
 
 @Controller('attendance')
 export class AttendanceController {
   constructor(private readonly attendanceService: AttendanceService) {}
 
   @Post('check-in')
-  checkIn(@Body() body: { employeeId: string; deviceId: string; gpsLocation: string; faceMatchScore: number }) {
-    return this.attendanceService.checkIn(body.employeeId, body.deviceId, body.gpsLocation, body.faceMatchScore);
+  checkIn(@Body() body: CreateAttendanceDto) {
+    return this.attendanceService.checkIn(
+      body.employeeId,
+      body.deviceId,
+      body.gpsLocation,
+      body.faceMatchScore,
+      body.photoUrl,
+      body.livenessPassed,
+    );
   }
 
   @Post('start-break/:recordId')
@@ -16,7 +24,10 @@ export class AttendanceController {
   }
 
   @Post('resume-duty/:recordId/:breakId')
-  resumeDuty(@Param('breakId') breakId: string, @Param('recordId') recordId: string) {
+  resumeDuty(
+    @Param('breakId') breakId: string,
+    @Param('recordId') recordId: string,
+  ) {
     return this.attendanceService.resumeDuty(breakId, recordId);
   }
 
