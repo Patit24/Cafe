@@ -2,7 +2,7 @@ import React, { useCallback, useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, SafeAreaView, StyleSheet, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useCameraPermissions, CameraView } from 'expo-camera';
-import { API_BASE_URL } from '@/lib/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://cafe-ho1d.onrender.com';
 import { generate512dEmbedding, getHighestMatchScore } from '../utils/faceEmbedding';
 
 type VerificationStep = 'detecting' | 'liveness' | 'matching' | 'success' | 'failed';
