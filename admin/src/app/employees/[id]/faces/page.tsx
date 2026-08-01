@@ -53,14 +53,10 @@ export default function FacialRegistrationPage({ params }: { params: { id: strin
     setIsUploading(true);
 
     try {
-      // Upload to Firebase Storage
-      const fileName = `faces/${params.id}_${activeAngle}_${Date.now()}.jpg`;
-      const storageRef = ref(storage, fileName);
-      await uploadString(storageRef, capturedImage, 'data_url');
-      const downloadURL = await getDownloadURL(storageRef);
+      const downloadURL = capturedImage;
 
       // Generate 512-dimensional embedding vector
-      const seedStr = `${params.id}_${activeAngle}_${downloadURL}`;
+      const seedStr = `${params.id}_${activeAngle}_${Date.now()}`;
       const vector = new Array(512);
       let hash = 0;
       for (let i = 0; i < seedStr.length; i++) {

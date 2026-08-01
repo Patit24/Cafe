@@ -75,13 +75,10 @@ export default function NewEmployeePage() {
           const photoData = facePhotos[angle];
           if (photoData) {
             try {
-              const fileName = `faces/${createdEmp.id}_${angle}_${Date.now()}.jpg`;
-              const storageRef = ref(storage, fileName);
-              await uploadString(storageRef, photoData, 'data_url');
-              const downloadURL = await getDownloadURL(storageRef);
+              const downloadURL = photoData;
 
               // Generate 512-dimensional embedding vector
-              const seedStr = `${createdEmp.id}_${angle}_${downloadURL}`;
+              const seedStr = `${createdEmp.id}_${angle}_${Date.now()}`;
               const vector = new Array(512);
               let hash = 0;
               for (let i = 0; i < seedStr.length; i++) {

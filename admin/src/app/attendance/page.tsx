@@ -47,7 +47,15 @@ export default function AttendancePage() {
           <h1 className="text-3xl font-bold text-on-surface">Attendance Log</h1>
           <p className="text-on-surface-variant text-sm mt-1">Daily check-in / check-out records with face verification audit</p>
         </div>
-        <div className="flex gap-3 items-center">
+        <div className="flex gap-3 items-center flex-wrap">
+          <a
+            href="https://evening-light-attendance.vercel.app"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg font-semibold hover:shadow-md transition-all text-sm flex items-center gap-2"
+          >
+            📱 Launch Face Verification App ↗
+          </a>
           <button
             onClick={fetchAttendance}
             className="px-4 py-2 bg-surface-container-high text-on-surface rounded border border-outline-variant hover:bg-surface-container text-sm font-medium"
