@@ -3,8 +3,9 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Webcam from 'react-webcam';
-import { Camera, Save, ArrowLeft, Trash2, Loader2, AlertCircle } from 'lucide-react';
+import { Camera, Save, ArrowLeft, Trash2, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
 import { API_BASE_URL, fastFetch } from '@/lib/api';
+import { loadFaceApiModels, generateNeuralFaceEmbedding } from '@/utils/faceEmbedding';
 
 export default function FacialRegistrationPage() {
   const router = useRouter();
@@ -17,10 +18,19 @@ export default function FacialRegistrationPage() {
   const [faces, setFaces] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [modelsReady, setModelsReady] = useState(false);
+  const [modelsLoading, setModelsLoading] = useState(true);
 
   const [activeAngle, setActiveAngle] = useState<'front' | 'left' | 'right'>('front');
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+
+  useEffect(() => {
+    loadFaceApiModels().then((ok) => {
+      setModelsReady(ok);
+      setModelsLoading(false);
+    });
+  }, []);
 
   useEffect(() => {
     if (id) fetchEmployeeAndFaces();
@@ -58,26 +68,19 @@ export default function FacialRegistrationPage() {
     try {
       const downloadURL = capturedImage;
 
-      // Generate 512-dimensional spatial frequency feature vector
-      const base64Data = capturedImage.includes(',') ? capturedImage.split(',')[1] : capturedImage;
-      const cleanStr = base64Data || capturedImage;
-      const len = cleanStr.length;
-      const vector = new Array(512).fill(0);
-
-      for (let i = 0; i < len; i++) {
-        const code = cleanStr.charCodeAt(i);
-        const binIndex = (i + code) % 512;
-        vector[binIndex] += Math.sin((code * (i % 37 + 1)) / 128.0) + 1.0;
+      // Generate REAL 128D neural face descriptor using face-api.js
+      let faceEmbedding: number[] | null = null;
+      if (modelsReady) {
+        faceEmbedding = await generateNeuralFaceEmbedding(capturedImage);
       }
 
-      let magnitude = 0;
-      for (let i = 0; i < 512; i++) {
-        magnitude += vector[i] * vector[i];
+      if (!faceEmbedding) {
+        alert('⚠️ No face detected in this photo. Please retake with your face clearly visible and well-lit.');
+        setIsUploading(false);
+        return;
       }
-      const norm = Math.sqrt(magnitude) || 1;
-      const faceEmbedding = vector.map((v) => v / norm);
 
-      // Save to Database
+      // Save to Database with real 128D embedding
       await fetch(`${API_BASE_URL}/employees/${id}/faces`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -119,6 +122,16 @@ export default function FacialRegistrationPage() {
     );
   }
 
+  if (modelsLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 flex-col gap-3">
+        <Loader2 className="animate-spin text-purple-600" size={32} />
+        <p className="text-gray-700 font-semibold">Loading AI Face Recognition Models...</p>
+        <p className="text-gray-400 text-sm">Downloading neural network weights (first time ~5MB)</p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 p-8">
       <div className="max-w-4xl mx-auto">
@@ -134,6 +147,12 @@ export default function FacialRegistrationPage() {
           <p className="text-sm text-gray-500 mt-1">
             Register face profiles for <span className="font-semibold text-gray-900">{employee?.name || 'Employee'}</span> to enable biometric attendance.
           </p>
+          {modelsReady && (
+            <div className="flex items-center gap-2 mt-2 text-green-600 text-xs font-medium">
+              <CheckCircle size={14} />
+              Neural face recognition models ready (128D descriptors)
+            </div>
+          )}
         </header>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

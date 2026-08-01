@@ -3,7 +3,11 @@ import { View, Text, TouchableOpacity, SafeAreaView, StyleSheet, ActivityIndicat
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useCameraPermissions, CameraView } from 'expo-camera';
 import Webcam from 'react-webcam';
-import { generate512dEmbedding, getHighestMatchScore } from '../utils/faceEmbedding';
+import {
+  loadFaceApiModels,
+  generateNeuralFaceEmbedding,
+  getBestFaceMatch,
+} from '../utils/faceEmbedding';
 import { API_BASE_URL } from '@/lib/api';
 
 type VerificationStep = 'detecting' | 'liveness' | 'matching' | 'success' | 'failed';
@@ -19,9 +23,21 @@ export default function CameraScreen() {
   const [employee, setEmployee] = useState<any>(null);
   const [loadingEmployee, setLoadingEmployee] = useState(true);
   const [status, setStatus] = useState<VerificationStep>('detecting');
+  const [modelsReady, setModelsReady] = useState(false);
+  const [modelsLoading, setModelsLoading] = useState(true);
 
   useEffect(() => {
     setHasMounted(true);
+    // Pre-load neural face models in background
+    if (Platform.OS === 'web') {
+      loadFaceApiModels().then((ok) => {
+        setModelsReady(ok);
+        setModelsLoading(false);
+      });
+    } else {
+      setModelsReady(false);
+      setModelsLoading(false);
+    }
   }, []);
 
   // Liveness Challenge state
@@ -51,8 +67,8 @@ export default function CameraScreen() {
       });
   }, [employeeId]);
 
-  // Execute 512D Cosine Vector Matching against Employee's Registered Faces
-  const performFaceMatching = useCallback(() => {
+  // Execute Neural Face Matching against Employee's Registered Faces
+  const performFaceMatching = useCallback(async () => {
     if (!employee || !employee.faces || employee.faces.length === 0) {
       setMatchScore(0);
       setBestAngle('None');
@@ -73,32 +89,36 @@ export default function CameraScreen() {
       return;
     }
 
-    // Capture real live webcam frame screenshot
+    // Capture live webcam frame
     const liveScreenshot = webcamRef.current?.getScreenshot() || capturedLiveFrame;
-
     if (!liveScreenshot) {
-      // Camera screenshot could not be captured
       setMatchScore(0);
-      setBestAngle('None');
       setStatus('failed');
       return;
     }
 
-    // Extract 512D feature vector from live screenshot
-    const liveVector = generate512dEmbedding(liveScreenshot);
+    // Generate REAL 128D neural face descriptor
+    const liveVector = await generateNeuralFaceEmbedding(liveScreenshot);
+
+    if (!liveVector) {
+      // No face detected in live frame
+      setMatchScore(0);
+      setBestAngle('No face detected');
+      setStatus('failed');
+      return;
+    }
 
     const registeredEmbeddings: (number[] | null)[] = validFaces.map((f: any) => f.faceEmbedding);
     const angleLabels = validFaces.map((f: any) => f.angle || 'Unknown');
 
-    // Compare live vector against ALL registered angle vectors using cosine similarity
-    const { highestScore, bestAngleIndex } = getHighestMatchScore(liveVector, registeredEmbeddings);
+    // Compare with Euclidean distance — the correct metric for face-api descriptors
+    const { bestScore, bestIndex, passed } = getBestFaceMatch(liveVector, registeredEmbeddings);
 
-    setMatchScore(Math.round(highestScore * 10) / 10);
-    setBestAngle(angleLabels[bestAngleIndex >= 0 ? bestAngleIndex : 0] || 'Front View');
+    setMatchScore(Math.round(bestScore * 10) / 10);
+    setBestAngle(angleLabels[bestIndex >= 0 ? bestIndex : 0] || 'Front View');
     setNoFaceDataError(false);
 
-    // Require 85% or higher feature similarity for passing
-    if (highestScore >= 85) {
+    if (passed) {
       setStatus('success');
     } else {
       setStatus('failed');
@@ -144,7 +164,7 @@ export default function CameraScreen() {
 
     if (status === 'matching') {
       const timer = setTimeout(() => {
-        performFaceMatching();
+        performFaceMatching(); // async — returns a promise, fire-and-forget
       }, 1000);
       return () => clearTimeout(timer);
     }
@@ -210,6 +230,22 @@ export default function CameraScreen() {
     );
   }
 
+  if (modelsLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={{ alignItems: 'center', marginTop: 100, padding: 24 }}>
+          <ActivityIndicator size="large" color="#38bdf8" />
+          <Text style={{ color: '#38bdf8', marginTop: 16, fontSize: 15, fontWeight: '600' }}>
+            Loading AI Face Recognition Models...
+          </Text>
+          <Text style={{ color: '#64748b', marginTop: 8, fontSize: 12, textAlign: 'center' }}>
+            Downloading neural network weights (first time only, ~5MB).
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
@@ -251,7 +287,7 @@ export default function CameraScreen() {
         {status === 'matching' && (
           <View style={styles.loadingOverlay}>
             <ActivityIndicator size="large" color="#2D9CDB" />
-            <Text style={styles.loadingText}>Comparing 512D Vector Embeddings...</Text>
+            <Text style={styles.loadingText}>Running Neural Face Recognition...</Text>
           </View>
         )}
 
