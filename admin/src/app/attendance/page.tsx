@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { API_BASE_URL } from '@/lib/api';
+import { API_BASE_URL, fastFetch } from '@/lib/api';
 
 export default function AttendancePage() {
   const [attendance, setAttendance] = useState<any[]>([]);
@@ -17,7 +17,7 @@ export default function AttendancePage() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_BASE_URL}/attendance`);
+      const response = await fastFetch(`${API_BASE_URL}/attendance`);
       if (!response.ok) throw new Error(`Server returned ${response.status}`);
       const data = await response.json();
       setAttendance(Array.isArray(data) ? data : []);

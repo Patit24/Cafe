@@ -8,12 +8,12 @@ import {
   ChevronRight, Timer, Clock3, CalendarX2, ArrowDownCircle, CalendarCheck,
   RefreshCw, Camera
 } from 'lucide-react';
-import { API_BASE_URL } from '@/lib/api';
+import { API_BASE_URL, fastFetch } from '@/lib/api';
 
 export default function Dashboard() {
   const [employees, setEmployees] = useState<any[]>([]);
   const [attendances, setAttendances] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
 
   useEffect(() => {
@@ -26,8 +26,8 @@ export default function Dashboard() {
     setLoading(true);
     try {
       const [empRes, attRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/employees`),
-        fetch(`${API_BASE_URL}/attendance`)
+        fastFetch(`${API_BASE_URL}/employees`),
+        fastFetch(`${API_BASE_URL}/attendance`)
       ]);
 
       const empData = await empRes.json();
