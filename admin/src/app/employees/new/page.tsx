@@ -1,10 +1,9 @@
 'use client';
+
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Camera, Upload, X, Loader2 } from 'lucide-react';
-import { storage } from '@/lib/firebase';
-import { ref, uploadString, getDownloadURL } from 'firebase/storage';
+import { Camera, Upload, X, Loader2, UserPlus } from 'lucide-react';
 import { API_BASE_URL } from '@/lib/api';
 
 export default function NewEmployeePage() {
@@ -15,8 +14,7 @@ export default function NewEmployeePage() {
     baseRate: '',
     salaryType: 'monthly'
   });
-  
-  // 4 Face Angles for Authentication
+
   const [facePhotos, setFacePhotos] = useState<{
     front: string | null;
     left: string | null;
@@ -31,6 +29,7 @@ export default function NewEmployeePage() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Fast client-side image compression (320px, ~15KB JPEG)
   const handlePhotoSelect = (angle: 'front' | 'left' | 'right' | 'top', file: File | null) => {
     if (!file) return;
     const reader = new FileReader();
@@ -38,7 +37,7 @@ export default function NewEmployeePage() {
       const img = document.createElement('img');
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const MAX_SIZE = 500;
+        const MAX_SIZE = 320;
         let width = img.width;
         let height = img.height;
         if (width > height) {
@@ -56,7 +55,7 @@ export default function NewEmployeePage() {
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         ctx?.drawImage(img, 0, 0, width, height);
-        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.8);
+        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
         setFacePhotos(prev => ({ ...prev, [angle]: compressedBase64 }));
       };
       img.src = e.target?.result as string;
@@ -69,16 +68,19 @@ export default function NewEmployeePage() {
   };
 
   const handleSaveEmployee = async () => {
-    if (!newEmployee.name) return;
+    if (!newEmployee.name.trim()) {
+      alert('Please enter employee full name.');
+      return;
+    }
     setIsSubmitting(true);
 
     const newCode = `EMP-${Math.floor(Math.random() * 900) + 100}`;
     const rateStr = newEmployee.baseRate.replace(/[^0-9.]/g, '');
-    const rate = parseFloat(rateStr) || 15.00;
+    const rate = parseFloat(rateStr) || 15000;
 
     const payload = {
       employeeCode: newCode,
-      name: newEmployee.name,
+      name: newEmployee.name.trim(),
       salaryType: newEmployee.salaryType,
       salaryRate: rate,
       isActive: true
@@ -90,18 +92,21 @@ export default function NewEmployeePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
+
+      if (!res.ok) {
+        throw new Error(`Server returned ${res.status}`);
+      }
+
       const createdEmp = await res.json();
 
-      // Upload face photos if provided
+      // Save face authentication photos & 512D vectors
       if (createdEmp?.id) {
         const angles: Array<'front' | 'left' | 'right' | 'top'> = ['front', 'left', 'right', 'top'];
         for (const angle of angles) {
           const photoData = facePhotos[angle];
           if (photoData) {
             try {
-              const downloadURL = photoData;
-
-              // Generate 512-dimensional embedding vector
+              // Generate 512-dimensional vector embedding
               const seedStr = `${createdEmp.id}_${angle}_${Date.now()}`;
               const vector = new Array(512);
               let hash = 0;
@@ -122,7 +127,7 @@ export default function NewEmployeePage() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  imageUrl: downloadURL,
+                  imageUrl: photoData,
                   angle: angle,
                   faceEmbedding: faceEmbedding
                 })
@@ -137,7 +142,7 @@ export default function NewEmployeePage() {
       router.push('/employees');
     } catch (err) {
       console.error(err);
-      alert('Failed to save employee. Make sure the backend server is reachable.');
+      alert('Failed to save employee profile. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -151,98 +156,105 @@ export default function NewEmployeePage() {
   ];
 
   return (
-    <div className="min-h-screen bg-surface-container-lowest text-on-surface p-8 relative">
-      <header className="flex justify-between items-center mb-8 border-b border-outline-variant pb-4">
+    <div className="min-h-screen bg-gray-50 text-gray-900 p-8">
+      <header className="flex justify-between items-center mb-8 border-b border-gray-200 pb-4 max-w-4xl mx-auto">
         <div>
-          <h1 className="text-display-sm font-bold text-primary">Add New Employee</h1>
-          <p className="text-body-md text-on-surface-variant">Create a new staff profile with face authentication setup.</p>
+          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
+            <UserPlus size={28} className="text-purple-600" />
+            Add New Employee
+          </h1>
+          <p className="text-sm text-gray-500 mt-1">Create staff profile with face authentication setup.</p>
         </div>
-        <Link href="/employees" className="bg-surface-container-high text-on-surface px-6 py-3 rounded text-label-md">
+        <Link href="/employees" className="bg-white text-gray-700 border border-gray-300 px-5 py-2.5 rounded-lg text-sm font-semibold hover:bg-gray-100">
           Back to Employees
         </Link>
       </header>
 
-      <div className="bg-surface-container-low rounded-xl p-8 max-w-3xl border border-outline-variant shadow-sm">
+      <div className="bg-white rounded-xl p-8 max-w-4xl mx-auto border border-gray-200 shadow-sm">
         <div className="flex flex-col gap-6">
-          {/* Basic Info */}
+          {/* Employee Name */}
           <div>
-            <label className="block text-label-md text-on-surface-variant mb-2">Full Name *</label>
+            <label className="block text-sm font-semibold text-gray-800 mb-1.5">
+              Full Name <span className="text-red-500">*</span>
+            </label>
             <input 
               type="text" 
               value={newEmployee.name}
               onChange={(e) => setNewEmployee({...newEmployee, name: e.target.value})}
-              className="w-full bg-surface-container-highest border border-outline-variant rounded-md p-3 text-body-md outline-none focus:border-primary"
-              placeholder="e.g. John Doe"
+              className="w-full bg-white border border-gray-300 rounded-lg p-3 text-gray-900 text-base font-medium outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100 transition-all"
+              placeholder="e.g. Rahul Das"
             />
           </div>
 
+          {/* Role */}
           <div>
-            <label className="block text-label-md text-on-surface-variant mb-2">Role</label>
+            <label className="block text-sm font-semibold text-gray-800 mb-1.5">Role / Position</label>
             <input 
               type="text" 
               value={newEmployee.role}
               onChange={(e) => setNewEmployee({...newEmployee, role: e.target.value})}
-              className="w-full bg-surface-container-highest border border-outline-variant rounded-md p-3 text-body-md outline-none focus:border-primary"
-              placeholder="e.g. Chef / Dishwasher"
+              className="w-full bg-white border border-gray-300 rounded-lg p-3 text-gray-900 text-base font-medium outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100 transition-all"
+              placeholder="e.g. Kitchen Chef / Staff"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          {/* Salary Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-label-md text-on-surface-variant mb-2">Salary Type</label>
+              <label className="block text-sm font-semibold text-gray-800 mb-1.5">Salary Type</label>
               <select 
                 value={newEmployee.salaryType}
                 onChange={(e) => setNewEmployee({...newEmployee, salaryType: e.target.value})}
-                className="w-full bg-surface-container-highest border border-outline-variant rounded-md p-3 text-body-md outline-none focus:border-primary"
+                className="w-full bg-white border border-gray-300 rounded-lg p-3 text-gray-900 text-base font-medium outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100 transition-all"
               >
-                <option value="hourly">Hourly</option>
-                <option value="daily">Daily</option>
                 <option value="monthly">Monthly</option>
+                <option value="daily">Daily</option>
+                <option value="hourly">Hourly</option>
               </select>
             </div>
             <div>
-              <label className="block text-label-md text-on-surface-variant mb-2">Base Rate (₹)</label>
+              <label className="block text-sm font-semibold text-gray-800 mb-1.5">Base Rate (₹)</label>
               <input 
                 type="text" 
                 value={newEmployee.baseRate}
                 onChange={(e) => setNewEmployee({...newEmployee, baseRate: e.target.value})}
-                className="w-full bg-surface-container-highest border border-outline-variant rounded-md p-3 text-body-md outline-none focus:border-primary"
+                className="w-full bg-white border border-gray-300 rounded-lg p-3 text-gray-900 text-base font-medium outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100 transition-all"
                 placeholder="e.g. 15000"
               />
             </div>
           </div>
 
-          {/* 4 Angle Face Uploads for Authentication */}
-          <div className="pt-4 border-t border-outline-variant">
-            <h2 className="text-lg font-bold text-gray-900 mb-1 flex items-center gap-2">
+          {/* 4 Angle Face Authentication Photos */}
+          <div className="pt-6 border-t border-gray-200 mt-2">
+            <h2 className="text-base font-bold text-gray-900 mb-1 flex items-center gap-2">
               <Camera className="text-purple-600" size={20} />
               Face Authentication Photos (4 Angles)
             </h2>
             <p className="text-xs text-gray-500 mb-4">
-              Upload photos from 4 different angles for accurate facial attendance matching.
+              Upload photos from 4 angles to enable automatic face attendance verification.
             </p>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               {ANGLES.map(({ key, label, desc }) => (
                 <div key={key} className="flex flex-col items-center">
                   <span className="text-xs font-semibold text-gray-700 mb-1">{label}</span>
-                  <div className="relative w-full aspect-square bg-surface-container-highest border-2 border-dashed border-gray-300 rounded-lg overflow-hidden flex flex-col items-center justify-center group hover:border-purple-500 transition-colors">
+                  <div className="relative w-full aspect-square bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl overflow-hidden flex flex-col items-center justify-center group hover:border-purple-500 transition-colors">
                     {facePhotos[key] ? (
                       <>
                         <img src={facePhotos[key]!} alt={label} className="w-full h-full object-cover" />
                         <button
                           type="button"
                           onClick={() => handleRemovePhoto(key)}
-                          className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full opacity-90 hover:opacity-100"
+                          className="absolute top-1.5 right-1.5 bg-red-600 text-white p-1 rounded-full shadow-md hover:bg-red-700 transition-colors"
                         >
                           <X size={14} />
                         </button>
                       </>
                     ) : (
                       <label className="w-full h-full flex flex-col items-center justify-center cursor-pointer p-2 text-center">
-                        <Upload size={20} className="text-gray-400 mb-1 group-hover:text-purple-600" />
-                        <span className="text-[11px] font-medium text-gray-600">Upload {label}</span>
-                        <span className="text-[9px] text-gray-400">{desc}</span>
+                        <Upload size={22} className="text-gray-400 mb-1 group-hover:text-purple-600 transition-colors" />
+                        <span className="text-xs font-semibold text-gray-700">Upload {label}</span>
+                        <span className="text-[10px] text-gray-400 mt-0.5">{desc}</span>
                         <input
                           type="file"
                           accept="image/*"
@@ -257,17 +269,18 @@ export default function NewEmployeePage() {
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-outline-variant">
+          {/* Action Buttons */}
+          <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-200">
             <Link 
               href="/employees"
-              className="px-5 py-2.5 text-on-surface-variant hover:text-on-surface font-medium"
+              className="px-6 py-3 text-gray-600 hover:text-gray-900 font-semibold text-sm rounded-lg"
             >
               Cancel
             </Link>
             <button 
               onClick={handleSaveEmployee}
               disabled={isSubmitting}
-              className="bg-purple-600 text-white px-8 py-3 rounded-md font-semibold hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2"
+              className="bg-purple-600 text-white px-8 py-3 rounded-lg font-bold hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2 shadow-sm text-sm"
             >
               {isSubmitting ? (
                 <>
