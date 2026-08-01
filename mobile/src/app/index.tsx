@@ -8,19 +8,23 @@ export default function AttendanceHome() {
   const [modalVisible, setModalVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [employees, setEmployees] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    
-    // Fetch employees
+  const loadEmployees = () => {
+    setLoading(true);
     fetch(`${API_BASE_URL}/employees`)
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) setEmployees(data);
       })
-      .catch(err => console.error('Failed to fetch employees:', err));
-      
+      .catch(err => console.error('Failed to fetch employees:', err))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    loadEmployees();
     return () => clearInterval(timer);
   }, []);
 
@@ -64,6 +68,7 @@ export default function AttendanceHome() {
         animationType="slide"
         transparent={true}
         visible={modalVisible}
+        onShow={loadEmployees}
         onRequestClose={() => setModalVisible(false)}
       >
         <View style={styles.modalOverlay}>

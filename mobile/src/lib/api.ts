@@ -1,6 +1,6 @@
-import Constants from 'expo-constants';
-
-const extra = Constants.expoConfig?.extra as { apiBaseUrl?: string } | undefined;
+const envUrl = process.env.EXPO_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_URL || '';
 
 export const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL || extra?.apiBaseUrl || 'http://localhost:3001';
+  envUrl && !envUrl.includes('your-render-service') && !envUrl.includes('cafe-ho1d') && !envUrl.includes('localhost')
+    ? envUrl
+    : 'https://backend-gold-sigma-74.vercel.app';

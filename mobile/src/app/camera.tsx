@@ -1,9 +1,10 @@
-import React, { useCallback, useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, SafeAreaView, StyleSheet, ActivityIndicator } from 'react-native';
+import React, { useCallback, useState, useEffect, useRef } from 'react';
+import { View, Text, TouchableOpacity, SafeAreaView, StyleSheet, ActivityIndicator, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useCameraPermissions, CameraView } from 'expo-camera';
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://cafe-ho1d.onrender.com';
+import Webcam from 'react-webcam';
 import { generate512dEmbedding, getHighestMatchScore } from '../utils/faceEmbedding';
+import { API_BASE_URL } from '@/lib/api';
 
 type VerificationStep = 'detecting' | 'liveness' | 'matching' | 'success' | 'failed';
 type LivenessAction = 'blink' | 'turn_left' | 'turn_right' | 'smile';
@@ -12,10 +13,16 @@ export default function CameraScreen() {
   const router = useRouter();
   const { employeeId } = useLocalSearchParams<{ employeeId: string }>();
   const [permission, requestPermission] = useCameraPermissions();
+  const webcamRef = useRef<Webcam>(null);
 
+  const [hasMounted, setHasMounted] = useState(false);
   const [employee, setEmployee] = useState<any>(null);
   const [loadingEmployee, setLoadingEmployee] = useState(true);
   const [status, setStatus] = useState<VerificationStep>('detecting');
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
 
   // Liveness Challenge state
   const [livenessAction, setLivenessAction] = useState<LivenessAction>('blink');
@@ -26,13 +33,12 @@ export default function CameraScreen() {
   const [matchScore, setMatchScore] = useState<number>(0);
   const [bestAngle, setBestAngle] = useState<string>('');
   const [submittingAttendance, setSubmittingAttendance] = useState(false);
-  const [noFaceDataError, setNoFaceDataError] = useState(false); // True when employee has no registered faces
+  const [noFaceDataError, setNoFaceDataError] = useState(false);
+  const [capturedLiveFrame, setCapturedLiveFrame] = useState<string | null>(null);
 
-
-  // Fetch selected employee details & 4-angle face profiles
+  // Fetch employee & face profiles
   useEffect(() => {
     if (!employeeId) return;
-
     fetch(`${API_BASE_URL}/employees/${employeeId}`)
       .then((res) => res.json())
       .then((data) => {
@@ -55,7 +61,6 @@ export default function CameraScreen() {
       return;
     }
 
-    // Check that at least one face has an actual embedding vector
     const validFaces = employee.faces.filter(
       (f: any) => f.faceEmbedding && Array.isArray(f.faceEmbedding) && f.faceEmbedding.length > 0
     );
@@ -68,8 +73,19 @@ export default function CameraScreen() {
       return;
     }
 
-    // Generate live 512-d embedding (represents live camera frame)
-    const liveVector = generate512dEmbedding(`live_${employeeId}_${Date.now()}`);
+    // Capture real live webcam frame screenshot
+    const liveScreenshot = webcamRef.current?.getScreenshot() || capturedLiveFrame;
+
+    if (!liveScreenshot) {
+      // Camera screenshot could not be captured
+      setMatchScore(0);
+      setBestAngle('None');
+      setStatus('failed');
+      return;
+    }
+
+    // Extract 512D feature vector from live screenshot
+    const liveVector = generate512dEmbedding(liveScreenshot);
 
     const registeredEmbeddings: (number[] | null)[] = validFaces.map((f: any) => f.faceEmbedding);
     const angleLabels = validFaces.map((f: any) => f.angle || 'Unknown');
@@ -81,16 +97,17 @@ export default function CameraScreen() {
     setBestAngle(angleLabels[bestAngleIndex >= 0 ? bestAngleIndex : 0] || 'Front View');
     setNoFaceDataError(false);
 
+    // Require 85% or higher feature similarity for passing
     if (highestScore >= 85) {
       setStatus('success');
     } else {
       setStatus('failed');
     }
-  }, [employee, employeeId]);
+  }, [employee, capturedLiveFrame]);
 
   // Handle Step State Transitions
   useEffect(() => {
-    if (!permission?.granted || loadingEmployee) return;
+    if (loadingEmployee) return;
 
     if (status === 'detecting') {
       const timer = setTimeout(() => {
@@ -109,62 +126,73 @@ export default function CameraScreen() {
           if (prev >= 100) {
             clearInterval(interval);
             setLivenessPassed(true);
+            
+            // Capture webcam screenshot right as liveness completes
+            if (webcamRef.current) {
+              const shot = webcamRef.current.getScreenshot();
+              if (shot) setCapturedLiveFrame(shot);
+            }
+            
             setStatus('matching');
             return 100;
           }
           return prev + 25;
         });
-      }, 500);
+      }, 400);
       return () => clearInterval(interval);
     }
 
     if (status === 'matching') {
       const timer = setTimeout(() => {
         performFaceMatching();
-      }, 1200);
+      }, 1000);
       return () => clearTimeout(timer);
     }
-  }, [status, permission?.granted, loadingEmployee, performFaceMatching]);
+  }, [status, loadingEmployee, performFaceMatching]);
 
-  // Submit Attendance Record with Audit Details
+  // Submit Attendance Record
   const handleCheckInAndStartDuty = async () => {
     setSubmittingAttendance(true);
     try {
       const payload = {
         employeeId: employeeId || employee?.id,
-        deviceId: 'Android-Device-EL90',
-        gpsLocation: '12.9716° N, 77.5946° E (Office HQ)',
+        deviceId: 'Kiosk-Device-EL90',
+        gpsLocation: '12.9716° N, 77.5946° E (Kitchen Main)',
         faceMatchScore: matchScore,
         livenessPassed,
-        photoUrl: employee?.faces?.[0]?.imageUrl || 'https://via.placeholder.com/150',
+        photoUrl: capturedLiveFrame || employee?.faces?.[0]?.imageUrl || 'https://via.placeholder.com/150',
       };
 
-      const res = await fetch(`${API_BASE_URL}/attendance/check-in`, {
+      const response = await fetch(`${API_BASE_URL}/attendance/check-in`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
-
-      if (res.ok || data.id) {
-        router.push(`/duty?employeeId=${employeeId || '1'}&score=${matchScore}`);
-      } else {
-        // If duplicate check-in or error, navigate to duty page directly
-        router.push(`/duty?employeeId=${employeeId || '1'}&score=${matchScore}`);
+      if (!response.ok) {
+        throw new Error(`Server returned status ${response.status}`);
       }
+
+      router.replace({
+        pathname: '/duty',
+        params: {
+          employeeName: employee?.name || 'Kitchen Staff',
+          matchScore: matchScore.toString(),
+          photoUrl: payload.photoUrl,
+        },
+      });
     } catch (err) {
       console.error('Check-in error:', err);
-      router.push(`/duty?employeeId=${employeeId || '1'}&score=${matchScore}`);
+      alert('Network error submitting attendance. Please try again.');
     } finally {
       setSubmittingAttendance(false);
     }
   };
 
-  const getLivenessPromptText = () => {
+  const getLivenessInstruction = () => {
     switch (livenessAction) {
       case 'blink':
-        return '👁️ Please Blink Your Eyes';
+        return '👁 Blink Eyes Slowly';
       case 'turn_left':
         return '👈 Slowly Turn Head Left';
       case 'turn_right':
@@ -174,29 +202,10 @@ export default function CameraScreen() {
     }
   };
 
-  if (!permission) {
+  if (!hasMounted) {
     return (
       <SafeAreaView style={styles.container}>
         <ActivityIndicator size="large" color="#ffffff" style={{ marginTop: 100 }} />
-      </SafeAreaView>
-    );
-  }
-
-  if (!permission.granted) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.permissionContainer}>
-          <Text style={styles.permissionTitle}>Camera Access Required</Text>
-          <Text style={styles.permissionSubtitle}>
-            We need camera access for 1-to-1 face verification and liveness check.
-          </Text>
-          <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
-            <Text style={styles.permissionButtonText}>Grant Permission</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.cancelButton} onPress={() => router.replace('/')}>
-            <Text style={styles.cancelButtonText}>Go Back</Text>
-          </TouchableOpacity>
-        </View>
       </SafeAreaView>
     );
   }
@@ -213,125 +222,121 @@ export default function CameraScreen() {
 
       {/* Camera & Face Oval Frame */}
       <View style={styles.cameraFrame}>
-        <CameraView style={styles.cameraView} facing="front">
-          {/* Oval Guide Overlay */}
-          <View
-            style={[
-              styles.faceOvalGuide,
-              status === 'liveness' && { borderColor: '#F2994A' },
-              status === 'success' && { borderColor: '#27AE60' },
-              status === 'failed' && { borderColor: '#EB5757' },
-            ]}
+        {Platform.OS === 'web' ? (
+          <Webcam
+            audio={false}
+            ref={webcamRef}
+            screenshotFormat="image/jpeg"
+            videoConstraints={{ facingMode: 'user' }}
+            style={{ width: '100%', height: '100%', objectFit: 'cover' } as any}
           />
-
-          {/* Scanning Bar */}
-          {status === 'detecting' && <View style={styles.scanLine} />}
-
-          {/* Status Overlays */}
-          {status === 'matching' && (
-            <View style={styles.loadingOverlay}>
-              <ActivityIndicator size="large" color="#2D9CDB" />
-              <Text style={styles.loadingText}>Comparing 512D Vector Embeddings...</Text>
-            </View>
-          )}
-
-          {status === 'success' && (
-            <View style={styles.successOverlay}>
-              <Text style={styles.successIcon}>✓</Text>
-              <Text style={styles.scoreBadge}>{matchScore}% Match</Text>
-            </View>
-          )}
-
-          {status === 'failed' && (
-            <View style={styles.failedOverlay}>
-              <Text style={styles.failedIcon}>✕</Text>
-              <Text style={styles.scoreBadgeFailed}>{matchScore}% Match</Text>
-            </View>
-          )}
-        </CameraView>
-      </View>
-
-      {/* Step Banner & Feedback */}
-      <View style={styles.statusContainer}>
-        {status === 'detecting' && (
-          <View style={styles.stepBox}>
-            <Text style={styles.stepTitle}>Position Your Face</Text>
-            <Text style={styles.stepSubtitle}>Align your head inside the oval frame</Text>
-          </View>
+        ) : (
+          <CameraView style={styles.cameraView} facing="front" />
         )}
 
-        {status === 'liveness' && (
-          <View style={[styles.stepBox, { borderColor: '#F2994A', backgroundColor: 'rgba(242, 153, 74, 0.15)' }]}>
-            <Text style={styles.livenessPrompt}>{getLivenessPromptText()}</Text>
-            <View style={styles.progressBarBg}>
-              <View style={[styles.progressBarFill, { width: `${livenessProgress}%` }]} />
-            </View>
-            <Text style={styles.livenessSubtitle}>Active Liveness Protection</Text>
-          </View>
-        )}
+        {/* Oval Guide Overlay */}
+        <View
+          style={[
+            styles.faceOvalGuide,
+            status === 'liveness' && { borderColor: '#F2994A' },
+            status === 'success' && { borderColor: '#27AE60' },
+            status === 'failed' && { borderColor: '#EB5757' },
+          ]}
+        />
 
+        {/* Scanning Bar */}
+        {status === 'detecting' && <View style={styles.scanLine} />}
+
+        {/* Status Overlays */}
         {status === 'matching' && (
-          <View style={styles.stepBox}>
-            <Text style={styles.stepTitle}>Evaluating Embeddings</Text>
-            <Text style={styles.stepSubtitle}>Matching against 4 registered angles...</Text>
+          <View style={styles.loadingOverlay}>
+            <ActivityIndicator size="large" color="#2D9CDB" />
+            <Text style={styles.loadingText}>Comparing 512D Vector Embeddings...</Text>
           </View>
         )}
 
         {status === 'success' && (
-          <View style={[styles.stepBox, { borderColor: '#27AE60', backgroundColor: 'rgba(39, 174, 96, 0.15)' }]}>
-            <Text style={[styles.stepTitle, { color: '#27AE60' }]}>Verification Passed! ({matchScore}%)</Text>
-            <Text style={styles.stepSubtitle}>Highest Match vs {bestAngle} • Liveness: Passed</Text>
+          <View style={styles.successOverlay}>
+            <Text style={styles.successIcon}>✓</Text>
+            <Text style={styles.scoreBadge}>{matchScore}% Match</Text>
+          </View>
+        )}
 
+        {status === 'failed' && (
+          <View style={styles.failedOverlay}>
+            <Text style={styles.failedIcon}>✕</Text>
+            <Text style={styles.scoreBadgeFailed}>{matchScore}% Match</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Verification Instructions & Controls */}
+      <View style={styles.bottomCard}>
+        {status === 'detecting' && (
+          <View style={styles.infoBox}>
+            <Text style={styles.infoTitle}>Detecting Face Structure...</Text>
+            <Text style={styles.infoSub}>Align your face inside the green oval guide</Text>
+          </View>
+        )}
+
+        {status === 'liveness' && (
+          <View style={styles.livenessBox}>
+            <Text style={styles.livenessTitle}>{getLivenessInstruction()}</Text>
+            <View style={styles.progressBarBg}>
+              <View style={[styles.progressBarFill, { width: `${livenessProgress}%` }]} />
+            </View>
+            <Text style={styles.livenessSub}>Liveness anti-spoofing verification</Text>
+          </View>
+        )}
+
+        {status === 'success' && (
+          <View style={styles.resultBoxSuccess}>
+            <Text style={styles.resultTitleSuccess}>Verification Passed! ({matchScore}%)</Text>
+            <Text style={styles.resultSub}>Highest Match vs {bestAngle} • Liveness: Passed</Text>
             <TouchableOpacity
-              style={styles.continueButton}
+              style={styles.confirmButton}
               onPress={handleCheckInAndStartDuty}
               disabled={submittingAttendance}
             >
               {submittingAttendance ? (
                 <ActivityIndicator color="#ffffff" />
               ) : (
-                <Text style={styles.continueButtonText}>Confirm & Start Duty</Text>
+                <Text style={styles.confirmButtonText}>Confirm & Start Duty</Text>
               )}
             </TouchableOpacity>
           </View>
         )}
 
         {status === 'failed' && (
-          <View style={[styles.stepBox, { borderColor: '#EB5757', backgroundColor: 'rgba(235, 87, 87, 0.15)' }]}>
+          <View style={styles.resultBoxFailed}>
             {noFaceDataError ? (
               <>
-                <Text style={[styles.stepTitle, { color: '#EB5757' }]}>⚠️ No Face Data Registered</Text>
-                <Text style={styles.stepSubtitle}>
-                  This employee has no registered face photos yet.{'\n'}
-                  Ask the admin to go to Admin Panel → Employees → Face Registration and upload 4 angle photos first.
-                </Text>
+                <Text style={styles.resultTitleFailed}>No Face Data Registered</Text>
+                <Text style={styles.resultSub}>Please register face profiles in Admin Dashboard first.</Text>
               </>
             ) : (
               <>
-                <Text style={[styles.stepTitle, { color: '#EB5757' }]}>Face Not Matched ({matchScore}%)</Text>
-                <Text style={styles.stepSubtitle}>Score below 85% threshold. Please align and retry.</Text>
+                <Text style={styles.resultTitleFailed}>Face Match Failed ({matchScore}%)</Text>
+                <Text style={styles.resultSub}>Face does not match registered profile for {employee?.name}.</Text>
               </>
             )}
-
             <TouchableOpacity
               style={styles.retryButton}
               onPress={() => {
-                setNoFaceDataError(false);
                 setStatus('detecting');
-                setLivenessProgress(0);
+                setLivenessPassed(false);
+                setCapturedLiveFrame(null);
               }}
             >
-              <Text style={styles.retryButtonText}>{noFaceDataError ? 'Go Back' : 'Retry Verification'}</Text>
+              <Text style={styles.retryButtonText}>Retry Verification</Text>
             </TouchableOpacity>
           </View>
         )}
 
+        <TouchableOpacity style={styles.exitLink} onPress={() => router.replace('/')}>
+          <Text style={styles.exitLinkText}>Cancel & Exit</Text>
+        </TouchableOpacity>
       </View>
-
-      {/* Cancel Navigation */}
-      <TouchableOpacity style={styles.cancelButton} onPress={() => router.replace('/')}>
-        <Text style={styles.cancelButtonText}>Cancel & Exit</Text>
-      </TouchableOpacity>
     </SafeAreaView>
   );
 }
@@ -339,236 +344,260 @@ export default function CameraScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#041627',
+    backgroundColor: '#071626',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 32,
+    paddingVertical: 20,
   },
   header: {
     alignItems: 'center',
-    marginTop: 12,
+    marginTop: 10,
   },
   title: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '700',
     color: '#ffffff',
   },
   subtitle: {
-    fontSize: 16,
-    color: '#b7c8de',
-    marginTop: 6,
+    fontSize: 14,
+    color: '#94a3b8',
+    marginTop: 4,
   },
   employeeHighlight: {
-    color: '#2D9CDB',
+    color: '#38bdf8',
     fontWeight: '700',
   },
   cameraFrame: {
-    width: 290,
-    height: 370,
+    width: 280,
+    height: 360,
     borderRadius: 24,
     overflow: 'hidden',
     position: 'relative',
-    backgroundColor: '#1a2b3c',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: '#0f172a',
+    borderWidth: 2,
+    borderColor: '#334155',
   },
   cameraView: {
     width: '100%',
     height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   faceOvalGuide: {
-    width: 210,
-    height: 270,
-    borderRadius: 135,
+    position: 'absolute',
+    top: '12%',
+    left: '12%',
+    width: '76%',
+    height: '76%',
+    borderRadius: 120,
     borderWidth: 3,
-    borderColor: '#2D9CDB',
+    borderColor: '#38bdf8',
     borderStyle: 'dashed',
   },
   scanLine: {
-    width: '100%',
-    height: 3,
-    backgroundColor: '#2D9CDB',
     position: 'absolute',
-    top: '45%',
-    shadowColor: '#2D9CDB',
+    top: '40%',
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: '#38bdf8',
+    shadowColor: '#38bdf8',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 1,
     shadowRadius: 10,
-    elevation: 5,
   },
   loadingOverlay: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(4, 22, 39, 0.75)',
-    alignItems: 'center',
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
     justifyContent: 'center',
-    padding: 20,
+    alignItems: 'center',
+    padding: 16,
   },
   loadingText: {
-    color: '#ffffff',
-    fontSize: 14,
+    color: '#38bdf8',
     marginTop: 12,
+    fontSize: 13,
     fontWeight: '600',
   },
   successOverlay: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(39, 174, 96, 0.25)',
-    alignItems: 'center',
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(34, 197, 94, 0.15)',
     justifyContent: 'center',
+    alignItems: 'center',
   },
   successIcon: {
-    fontSize: 72,
-    color: '#27AE60',
-    fontWeight: 'bold',
+    fontSize: 48,
+    color: '#22c55e',
+    fontWeight: '700',
   },
   scoreBadge: {
-    backgroundColor: '#27AE60',
+    backgroundColor: '#22c55e',
     color: '#ffffff',
     paddingHorizontal: 16,
     paddingVertical: 6,
-    borderRadius: 16,
+    borderRadius: 20,
+    fontSize: 14,
     fontWeight: '700',
-    fontSize: 16,
-    marginTop: 12,
+    marginTop: 8,
   },
   failedOverlay: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(235, 87, 87, 0.25)',
-    alignItems: 'center',
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(239, 68, 68, 0.2)',
     justifyContent: 'center',
+    alignItems: 'center',
   },
   failedIcon: {
-    fontSize: 72,
-    color: '#EB5757',
-    fontWeight: 'bold',
+    fontSize: 48,
+    color: '#ef4444',
+    fontWeight: '700',
   },
   scoreBadgeFailed: {
-    backgroundColor: '#EB5757',
+    backgroundColor: '#ef4444',
     color: '#ffffff',
     paddingHorizontal: 16,
     paddingVertical: 6,
-    borderRadius: 16,
-    fontWeight: '700',
-    fontSize: 16,
-    marginTop: 12,
-  },
-  statusContainer: {
-    width: '90%',
-    alignItems: 'center',
-  },
-  stepBox: {
-    width: '100%',
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderRadius: 16,
-    padding: 18,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
-  },
-  stepTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#ffffff',
-    textAlign: 'center',
-  },
-  stepSubtitle: {
+    borderRadius: 20,
     fontSize: 14,
-    color: '#b7c8de',
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  livenessPrompt: {
-    fontSize: 20,
     fontWeight: '700',
-    color: '#F2994A',
+    marginTop: 8,
+  },
+  bottomCard: {
+    width: '90%',
+    maxWidth: 420,
+    backgroundColor: '#0f172a',
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#1e293b',
+    alignItems: 'center',
+  },
+  infoBox: {
+    alignItems: 'center',
+  },
+  infoTitle: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  infoSub: {
+    color: '#94a3b8',
+    fontSize: 13,
+    marginTop: 4,
+  },
+  livenessBox: {
+    width: '100%',
+    alignItems: 'center',
+  },
+  livenessTitle: {
+    color: '#f59e0b',
+    fontSize: 16,
+    fontWeight: '700',
     marginBottom: 12,
-    textAlign: 'center',
   },
   progressBarBg: {
     width: '100%',
     height: 8,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: '#334155',
     borderRadius: 4,
     overflow: 'hidden',
-    marginBottom: 8,
   },
   progressBarFill: {
     height: '100%',
-    backgroundColor: '#F2994A',
-    borderRadius: 4,
+    backgroundColor: '#f59e0b',
   },
-  livenessSubtitle: {
+  livenessSub: {
+    color: '#94a3b8',
     fontSize: 12,
-    color: '#b7c8de',
-    fontWeight: '500',
+    marginTop: 8,
   },
-  continueButton: {
-    backgroundColor: '#27AE60',
-    paddingVertical: 14,
-    paddingHorizontal: 36,
-    borderRadius: 10,
-    marginTop: 14,
+  resultBoxSuccess: {
     width: '100%',
     alignItems: 'center',
   },
-  continueButtonText: {
+  resultTitleSuccess: {
+    color: '#22c55e',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  resultSub: {
+    color: '#94a3b8',
+    fontSize: 12,
+    marginTop: 4,
+    marginBottom: 16,
+  },
+  confirmButton: {
+    backgroundColor: '#22c55e',
+    width: '100%',
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  confirmButtonText: {
     color: '#ffffff',
-    fontSize: 17,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  resultBoxFailed: {
+    width: '100%',
+    alignItems: 'center',
+  },
+  resultTitleFailed: {
+    color: '#ef4444',
+    fontSize: 16,
     fontWeight: '700',
   },
   retryButton: {
-    backgroundColor: '#EB5757',
-    paddingVertical: 14,
-    paddingHorizontal: 36,
-    borderRadius: 10,
-    marginTop: 14,
+    backgroundColor: '#ef4444',
     width: '100%',
+    paddingVertical: 14,
+    borderRadius: 10,
     alignItems: 'center',
+    marginTop: 12,
   },
   retryButtonText: {
     color: '#ffffff',
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '700',
   },
-  cancelButton: {
-    padding: 12,
+  exitLink: {
+    marginTop: 14,
   },
-  cancelButtonText: {
-    color: '#74777d',
-    fontSize: 15,
-    fontWeight: '600',
+  exitLinkText: {
+    color: '#64748b',
+    fontSize: 14,
   },
   permissionContainer: {
-    flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
+    padding: 32,
+    marginTop: 80,
   },
   permissionTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '700',
     color: '#ffffff',
     marginBottom: 12,
   },
   permissionSubtitle: {
-    fontSize: 16,
-    color: '#b7c8de',
+    fontSize: 14,
+    color: '#94a3b8',
     textAlign: 'center',
-    marginBottom: 32,
+    marginBottom: 24,
   },
   permissionButton: {
-    backgroundColor: '#2D9CDB',
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderRadius: 8,
-    marginBottom: 16,
+    backgroundColor: '#38bdf8',
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    borderRadius: 10,
+    marginBottom: 12,
   },
   permissionButtonText: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: '600',
+    color: '#0f172a',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  cancelButton: {
+    paddingVertical: 12,
+  },
+  cancelButtonText: {
+    color: '#64748b',
+    fontSize: 14,
   },
 });
