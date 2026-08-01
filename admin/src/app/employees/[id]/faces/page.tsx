@@ -58,22 +58,23 @@ export default function FacialRegistrationPage() {
     try {
       const downloadURL = capturedImage;
 
-      // Generate 512-dimensional feature embedding vector directly from captured image
-      const len = capturedImage.length;
-      const step = Math.max(1, Math.floor(len / 512));
-      const vector = new Array(512);
-      let mag = 0;
+      // Generate 512-dimensional spatial frequency feature vector
+      const base64Data = capturedImage.includes(',') ? capturedImage.split(',')[1] : capturedImage;
+      const cleanStr = base64Data || capturedImage;
+      const len = cleanStr.length;
+      const vector = new Array(512).fill(0);
 
-      for (let i = 0; i < 512; i++) {
-        const charIndex = (i * step) % len;
-        const charCode = capturedImage.charCodeAt(charIndex);
-        const prevChar = capturedImage.charCodeAt((charIndex + 7) % len);
-        const nextChar = capturedImage.charCodeAt((charIndex + 13) % len);
-        const val = Math.sin((charCode * (i + 1)) / 17.0) * Math.cos((prevChar ^ nextChar) / 23.0);
-        vector[i] = val;
-        mag += val * val;
+      for (let i = 0; i < len; i++) {
+        const code = cleanStr.charCodeAt(i);
+        const binIndex = (i + code) % 512;
+        vector[binIndex] += Math.sin((code * (i % 37 + 1)) / 128.0) + 1.0;
       }
-      const norm = Math.sqrt(mag) || 1;
+
+      let magnitude = 0;
+      for (let i = 0; i < 512; i++) {
+        magnitude += vector[i] * vector[i];
+      }
+      const norm = Math.sqrt(magnitude) || 1;
       const faceEmbedding = vector.map((v) => v / norm);
 
       // Save to Database
