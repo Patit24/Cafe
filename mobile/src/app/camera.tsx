@@ -25,6 +25,7 @@ export default function CameraScreen() {
   const [status, setStatus] = useState<VerificationStep>('detecting');
   const [modelsReady, setModelsReady] = useState(false);
   const [modelsLoading, setModelsLoading] = useState(true);
+  const [failReason, setFailReason] = useState<'none' | 'no_face' | 'old_embeddings' | 'mismatch'>('none');
 
   useEffect(() => {
     setHasMounted(true);
@@ -74,6 +75,7 @@ export default function CameraScreen() {
       setBestAngle('None');
       setStatus('failed');
       setNoFaceDataError(true);
+      setFailReason('none');
       return;
     }
 
@@ -86,6 +88,7 @@ export default function CameraScreen() {
       setBestAngle('None');
       setStatus('failed');
       setNoFaceDataError(true);
+      setFailReason('none');
       return;
     }
 
@@ -94,6 +97,7 @@ export default function CameraScreen() {
     if (!liveScreenshot) {
       setMatchScore(0);
       setStatus('failed');
+      setFailReason('no_face');
       return;
     }
 
@@ -101,22 +105,32 @@ export default function CameraScreen() {
     const liveVector = await generateNeuralFaceEmbedding(liveScreenshot);
 
     if (!liveVector) {
-      // No face detected in live frame
       setMatchScore(0);
       setBestAngle('No face detected');
       setStatus('failed');
+      setFailReason('no_face');
       return;
     }
 
     const registeredEmbeddings: (number[] | null)[] = validFaces.map((f: any) => f.faceEmbedding);
     const angleLabels = validFaces.map((f: any) => f.angle || 'Unknown');
 
-    // Compare with Euclidean distance — the correct metric for face-api descriptors
-    const { bestScore, bestIndex, passed } = getBestFaceMatch(liveVector, registeredEmbeddings);
+    const { bestScore, bestIndex, passed, noValidStored } = getBestFaceMatch(liveVector, registeredEmbeddings);
+
+    if (noValidStored) {
+      // All stored embeddings are old 512D — need re-registration
+      setMatchScore(0);
+      setBestAngle('Re-registration required');
+      setStatus('failed');
+      setNoFaceDataError(true);
+      setFailReason('old_embeddings');
+      return;
+    }
 
     setMatchScore(Math.round(bestScore * 10) / 10);
     setBestAngle(angleLabels[bestIndex >= 0 ? bestIndex : 0] || 'Front View');
     setNoFaceDataError(false);
+    setFailReason(passed ? 'none' : 'mismatch');
 
     if (passed) {
       setStatus('success');
@@ -345,10 +359,22 @@ export default function CameraScreen() {
 
         {status === 'failed' && (
           <View style={styles.resultBoxFailed}>
-            {noFaceDataError ? (
+            {noFaceDataError && failReason === 'old_embeddings' ? (
+              <>
+                <Text style={styles.resultTitleFailed}>⚠️ Re-Registration Required</Text>
+                <Text style={styles.resultSub}>
+                  Face photos were saved with old system. Please go to Admin Portal → re-register face photos for {employee?.name}.
+                </Text>
+              </>
+            ) : noFaceDataError ? (
               <>
                 <Text style={styles.resultTitleFailed}>No Face Data Registered</Text>
                 <Text style={styles.resultSub}>Please register face profiles in Admin Dashboard first.</Text>
+              </>
+            ) : failReason === 'no_face' ? (
+              <>
+                <Text style={styles.resultTitleFailed}>No Face Detected</Text>
+                <Text style={styles.resultSub}>Make sure your face is clearly visible, well-lit, and centered in the oval.</Text>
               </>
             ) : (
               <>
@@ -362,6 +388,7 @@ export default function CameraScreen() {
                 setStatus('detecting');
                 setLivenessPassed(false);
                 setCapturedLiveFrame(null);
+                setFailReason('none');
               }}
             >
               <Text style={styles.retryButtonText}>Retry Verification</Text>

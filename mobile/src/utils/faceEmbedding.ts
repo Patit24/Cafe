@@ -1,174 +1,181 @@
 /**
- * Real Neural Face Embedding using face-api.js
- * Loads TinyFaceDetector + FaceRecognitionNet to produce true 128-D descriptors.
+ * Real Neural Face Embedding — uses @vladmandic/face-api (installed npm package)
+ * Model weights loaded from jsDelivr npm CDN (same package, always 200 OK).
  *
- * HOW IT WORKS:
- *  1. Models are loaded once from CDN (cached by browser).
- *  2. An image/video element is passed in.
- *  3. A face is detected, aligned via landmarks, then a 128-float descriptor is computed.
- *  4. Cosine similarity (or Euclidean distance) is used to compare live vs stored vectors.
- *
- * Threshold: Euclidean distance < 0.45 = same person (face-api default recommendation)
+ * Produces a 128-float descriptor via FaceRecognitionNet.
+ * Comparison: Euclidean distance  < 0.45 → same person
  */
 
 export type FaceEmbedding = number[];
 
-let faceApiLoaded = false;
+// Model weights served from the npm package CDN — guaranteed 200
+const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model';
+
 let faceapi: any = null;
+let modelsLoaded = false;
+let loadingPromise: Promise<boolean> | null = null;
 
 /**
- * Dynamically loads face-api.js from CDN and pre-loads the three required models.
- * Safe to call multiple times — only loads once.
+ * Load @vladmandic/face-api and its model weights (idempotent).
  */
 export async function loadFaceApiModels(): Promise<boolean> {
-  if (faceApiLoaded && faceapi) return true;
+  if (modelsLoaded && faceapi) return true;
+  if (loadingPromise) return loadingPromise; // prevent double-load
 
-  try {
-    // Dynamically import face-api.js
-    if (typeof window === 'undefined') return false;
+  loadingPromise = (async () => {
+    try {
+      if (typeof window === 'undefined') return false;
 
-    // Load the face-api.js script from CDN if not already loaded
-    if (!(window as any).faceapi) {
-      await new Promise<void>((resolve, reject) => {
-        const script = document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js';
-        script.onload = () => resolve();
-        script.onerror = () => reject(new Error('Failed to load face-api.js'));
-        document.head.appendChild(script);
-      });
+      // Dynamic import of the installed npm package
+      const mod = await import('@vladmandic/face-api');
+      faceapi = mod.default ?? mod;
+
+      console.log('[FaceAPI] Package imported, loading model weights from CDN...');
+
+      await Promise.all([
+        faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+        faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL),
+        faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+      ]);
+
+      modelsLoaded = true;
+      console.log('[FaceAPI] ✅ Neural models ready (TinyFaceDetector + FaceRecognitionNet)');
+      return true;
+    } catch (err) {
+      console.error('[FaceAPI] ❌ Failed to load models:', err);
+      modelsLoaded = false;
+      loadingPromise = null; // allow retry
+      return false;
     }
+  })();
 
-    faceapi = (window as any).faceapi;
-
-    // Load models from a public CDN mirror
-    const MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights';
-
-    await Promise.all([
-      faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-      faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL),
-      faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
-    ]);
-
-    faceApiLoaded = true;
-    console.log('✅ face-api.js neural models loaded successfully');
-    return true;
-  } catch (err) {
-    console.error('❌ Failed to load face-api.js models:', err);
-    faceApiLoaded = false;
-    return false;
-  }
+  return loadingPromise;
 }
 
 /**
- * Converts a base64 image string to an HTMLImageElement for face-api processing.
+ * Creates an HTMLImageElement from a base64 JPEG string.
  */
-function base64ToImage(base64: string): Promise<HTMLImageElement> {
+function makeImage(base64: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.crossOrigin = 'anonymous';
     img.onload = () => resolve(img);
-    img.onerror = reject;
+    img.onerror = (e) => reject(e);
     img.src = base64.startsWith('data:') ? base64 : `data:image/jpeg;base64,${base64}`;
   });
 }
 
 /**
- * Generates a true 128-dimensional neural face descriptor from an image.
- * Returns null if no face is detected or models are not loaded.
+ * Generate a real 128-dimensional neural face descriptor from a base64 image.
+ * Returns null if no face is detected or models aren't ready.
  */
 export async function generateNeuralFaceEmbedding(imageBase64: string): Promise<number[] | null> {
   if (!imageBase64) return null;
 
-  const loaded = await loadFaceApiModels();
-  if (!loaded || !faceapi) return null;
+  const ready = await loadFaceApiModels();
+  if (!ready || !faceapi) {
+    console.warn('[FaceAPI] Models not ready');
+    return null;
+  }
 
   try {
-    const img = await base64ToImage(imageBase64);
+    const img = await makeImage(imageBase64);
 
-    const options = new faceapi.TinyFaceDetectorOptions({
+    const opts = new faceapi.TinyFaceDetectorOptions({
       inputSize: 320,
-      scoreThreshold: 0.4,
+      scoreThreshold: 0.3, // lower threshold = easier detection
     });
 
-    const detection = await faceapi
-      .detectSingleFace(img, options)
-      .withFaceLandmarks(true)
-      .withFaceDescriptor();
+    const result = await faceapi
+      .detectSingleFace(img, opts)
+      .withFaceLandmarks(true)  // tiny landmarks model
+      .withFaceDescriptor();    // 128D FaceRecognitionNet
 
-    if (!detection) {
-      console.warn('⚠️ No face detected in image');
+    if (!result) {
+      console.warn('[FaceAPI] No face detected in image');
       return null;
     }
 
-    // descriptor is a Float32Array of 128 values
-    return Array.from(detection.descriptor);
+    console.log('[FaceAPI] ✅ Face detected, descriptor length:', result.descriptor.length);
+    return Array.from(result.descriptor); // Float32Array → number[]
   } catch (err) {
-    console.error('Face embedding error:', err);
+    console.error('[FaceAPI] Detection error:', err);
     return null;
   }
 }
 
 /**
- * Calculates Euclidean distance between two 128-D face descriptors.
- * Lower = more similar. Threshold: < 0.45 = same person.
+ * Euclidean distance between two 128-D descriptors.
+ * Returns Infinity if lengths don't match.
  */
 export function euclideanDistance(a: number[], b: number[]): number {
   if (!a || !b || a.length !== b.length) return Infinity;
   let sum = 0;
   for (let i = 0; i < a.length; i++) {
-    const diff = a[i] - b[i];
-    sum += diff * diff;
+    const d = a[i] - b[i];
+    sum += d * d;
   }
   return Math.sqrt(sum);
 }
 
 /**
- * Converts Euclidean distance to a human-readable match percentage.
- * Distance 0.0 = 100%, Distance 0.6+ = 0%
+ * Convert Euclidean distance to human-readable percentage.
+ * 0.0 → 100%,  0.6+ → 0%
  */
-export function distanceToMatchPercent(distance: number): number {
-  // Linear scale: 0.0 → 100%, 0.6 → 0%
-  const pct = Math.max(0, Math.min(100, (1 - distance / 0.6) * 100));
-  return Math.round(pct * 10) / 10;
+export function distanceToMatchPercent(dist: number): number {
+  if (!isFinite(dist)) return 0;
+  return Math.max(0, Math.min(100, Math.round((1 - dist / 0.6) * 1000) / 10));
 }
 
 /**
- * Compare a live face embedding against ALL registered face embeddings.
- * Returns the best match score (%) and the index of best matching face.
- * THRESHOLD: distance < 0.45 (= ~25% match percent) = PASS
+ * Compare a live 128D embedding against all stored embeddings.
+ * Skips stored vectors that are not 128-dimensional (old fake 512D ones).
  */
 export function getBestFaceMatch(
-  liveEmbedding: number[],
-  registeredEmbeddings: (number[] | null | undefined)[]
-): { bestScore: number; bestIndex: number; passed: boolean } {
+  live: number[],
+  stored: (number[] | null | undefined)[]
+): { bestScore: number; bestIndex: number; passed: boolean; noValidStored: boolean } {
   let bestScore = 0;
   let bestIndex = -1;
+  let validCount = 0;
 
-  registeredEmbeddings.forEach((stored, i) => {
-    if (!stored || stored.length === 0) return;
-    const dist = euclideanDistance(liveEmbedding, stored);
+  stored.forEach((vec, i) => {
+    if (!vec || vec.length === 0) return;
+
+    // Dimension guard: only compare 128D vs 128D
+    if (vec.length !== 128) {
+      console.warn(`[FaceAPI] Skipping stored embedding at index ${i}: length=${vec.length} (not 128D — please re-register)`);
+      return;
+    }
+
+    validCount++;
+    const dist = euclideanDistance(live, vec);
     const score = distanceToMatchPercent(dist);
+    console.log(`[FaceAPI] Embedding[${i}] distance=${dist.toFixed(4)} score=${score}%`);
     if (score > bestScore) {
       bestScore = score;
       bestIndex = i;
     }
   });
 
-  // Pass if best distance is < 0.45 (≈ score > 25%)
-  // We use a slightly more generous threshold (score >= 40%) for real-world lighting variation
-  return { bestScore, bestIndex, passed: bestScore >= 40 };
+  // Threshold: 40% ≈ Euclidean ~0.36 (generous for lighting variation)
+  return {
+    bestScore,
+    bestIndex,
+    passed: bestScore >= 40,
+    noValidStored: validCount === 0,
+  };
 }
 
-// ─── Legacy compatibility shim (kept for old callers) ──────────────────────
-export function calculateCosineSimilarity(vectorA: number[], vectorB: number[]): number {
-  const dist = euclideanDistance(vectorA, vectorB);
-  return Math.max(0, 1 - dist / 0.6);
+// ── Legacy shims for old call-sites ──────────────────────────────────────────
+export function calculateCosineSimilarity(a: number[], b: number[]): number {
+  const d = euclideanDistance(a, b);
+  return isFinite(d) ? Math.max(0, 1 - d / 0.6) : 0;
 }
 
 export function getHighestMatchScore(
-  liveEmbedding: number[],
-  registeredEmbeddings: (number[] | null | undefined)[]
+  live: number[],
+  stored: (number[] | null | undefined)[]
 ): { highestScore: number; bestAngleIndex: number } {
-  const { bestScore, bestIndex } = getBestFaceMatch(liveEmbedding, registeredEmbeddings);
+  const { bestScore, bestIndex } = getBestFaceMatch(live, stored);
   return { highestScore: bestScore, bestAngleIndex: bestIndex };
 }
