@@ -7,6 +7,8 @@
   "license": "UNLICENSED",
   "scripts": {
     "build": "npx prisma generate && npx prisma db push --accept-data-loss && nest build",
+    "postinstall": "npx prisma generate",
+    "vercel-build": "npx prisma generate && nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
