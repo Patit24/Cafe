@@ -34,8 +34,32 @@ export default function NewEmployeePage() {
   const handlePhotoSelect = (angle: 'front' | 'left' | 'right' | 'top', file: File | null) => {
     if (!file) return;
     const reader = new FileReader();
-    reader.onloadend = () => {
-      setFacePhotos(prev => ({ ...prev, [angle]: reader.result as string }));
+    reader.onload = (e) => {
+      const img = document.createElement('img');
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_SIZE = 500;
+        let width = img.width;
+        let height = img.height;
+        if (width > height) {
+          if (width > MAX_SIZE) {
+            height = Math.round(height * (MAX_SIZE / width));
+            width = MAX_SIZE;
+          }
+        } else {
+          if (height > MAX_SIZE) {
+            width = Math.round(width * (MAX_SIZE / height));
+            height = MAX_SIZE;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.8);
+        setFacePhotos(prev => ({ ...prev, [angle]: compressedBase64 }));
+      };
+      img.src = e.target?.result as string;
     };
     reader.readAsDataURL(file);
   };
