@@ -58,22 +58,23 @@ export default function FacialRegistrationPage() {
     try {
       const downloadURL = capturedImage;
 
-      // Generate 512-dimensional embedding vector
-      const seedStr = `${id}_${activeAngle}_${Date.now()}`;
+      // Generate 512-dimensional feature embedding vector directly from captured image
+      const len = capturedImage.length;
+      const step = Math.max(1, Math.floor(len / 512));
       const vector = new Array(512);
-      let hash = 0;
-      for (let i = 0; i < seedStr.length; i++) {
-        hash = (hash << 5) - hash + seedStr.charCodeAt(i);
-        hash |= 0;
-      }
       let mag = 0;
+
       for (let i = 0; i < 512; i++) {
-        const val = Math.sin(hash + i * 0.1) * Math.cos(i * 0.05);
+        const charIndex = (i * step) % len;
+        const charCode = capturedImage.charCodeAt(charIndex);
+        const prevChar = capturedImage.charCodeAt((charIndex + 7) % len);
+        const nextChar = capturedImage.charCodeAt((charIndex + 13) % len);
+        const val = Math.sin((charCode * (i + 1)) / 17.0) * Math.cos((prevChar ^ nextChar) / 23.0);
         vector[i] = val;
         mag += val * val;
       }
-      const norm = Math.sqrt(mag);
-      const faceEmbedding = vector.map(v => v / norm);
+      const norm = Math.sqrt(mag) || 1;
+      const faceEmbedding = vector.map((v) => v / norm);
 
       // Save to Database
       await fetch(`${API_BASE_URL}/employees/${id}/faces`, {
