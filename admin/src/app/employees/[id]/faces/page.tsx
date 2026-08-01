@@ -1,39 +1,42 @@
 'use client';
+
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import Webcam from 'react-webcam';
 import { Camera, Save, ArrowLeft, Trash2, Loader2, AlertCircle } from 'lucide-react';
-import { storage } from '@/lib/firebase';
-import { ref, uploadString, getDownloadURL } from 'firebase/storage';
-import { API_BASE_URL } from '@/lib/api';
+import { API_BASE_URL, fastFetch } from '@/lib/api';
 
-export default function FacialRegistrationPage({ params }: { params: { id: string } }) {
+export default function FacialRegistrationPage() {
   const router = useRouter();
+  const params = useParams();
+  const id = params?.id as string;
+
   const webcamRef = useRef<Webcam>(null);
-  
+
   const [employee, setEmployee] = useState<any>(null);
   const [faces, setFaces] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCapturing, setIsCapturing] = useState(false);
-  
+
   const [activeAngle, setActiveAngle] = useState<'front' | 'left' | 'right'>('front');
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
   useEffect(() => {
-    fetchEmployeeAndFaces();
-  }, [params.id]);
+    if (id) fetchEmployeeAndFaces();
+  }, [id]);
 
   const fetchEmployeeAndFaces = async () => {
+    if (!id) return;
     try {
       const [empRes, faceRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/employees/${params.id}`),
-        fetch(`${API_BASE_URL}/employees/${params.id}/faces`)
+        fastFetch(`${API_BASE_URL}/employees/${id}`),
+        fastFetch(`${API_BASE_URL}/employees/${id}/faces`)
       ]);
       const empData = await empRes.json();
       const faceData = await faceRes.json();
       setEmployee(empData);
-      setFaces(faceData);
+      setFaces(Array.isArray(faceData) ? faceData : []);
     } catch (err) {
       console.error('Failed to fetch data', err);
     } finally {
@@ -49,14 +52,14 @@ export default function FacialRegistrationPage({ params }: { params: { id: strin
   }, [webcamRef]);
 
   const saveFace = async () => {
-    if (!capturedImage) return;
+    if (!capturedImage || !id) return;
     setIsUploading(true);
 
     try {
       const downloadURL = capturedImage;
 
       // Generate 512-dimensional embedding vector
-      const seedStr = `${params.id}_${activeAngle}_${Date.now()}`;
+      const seedStr = `${id}_${activeAngle}_${Date.now()}`;
       const vector = new Array(512);
       let hash = 0;
       for (let i = 0; i < seedStr.length; i++) {
@@ -73,7 +76,7 @@ export default function FacialRegistrationPage({ params }: { params: { id: strin
       const faceEmbedding = vector.map(v => v / norm);
 
       // Save to Database
-      await fetch(`${API_BASE_URL}/employees/${params.id}/faces`, {
+      await fetch(`${API_BASE_URL}/employees/${id}/faces`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -107,18 +110,19 @@ export default function FacialRegistrationPage({ params }: { params: { id: strin
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f8fafc]">
-        <Loader2 className="animate-spin text-blue-500" size={32} />
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-600 font-medium">
+        <Loader2 className="animate-spin text-purple-600 mr-2" size={24} />
+        Loading face profiles...
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] text-slate-800 p-8">
+    <div className="min-h-screen bg-gray-50 text-gray-900 p-8">
       <div className="max-w-4xl mx-auto">
         <button 
           onClick={() => router.push('/employees')}
-          className="flex items-center gap-2 text-gray-500 hover:text-gray-900 mb-6 transition-colors"
+          className="flex items-center gap-2 text-gray-500 hover:text-gray-900 mb-6 transition-colors font-medium text-sm"
         >
           <ArrowLeft size={16} /> Back to Employees
         </button>
@@ -126,7 +130,7 @@ export default function FacialRegistrationPage({ params }: { params: { id: strin
         <header className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Facial Registration</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Register face profiles for <span className="font-semibold text-gray-700">{employee?.name}</span> to enable biometric attendance.
+            Register face profiles for <span className="font-semibold text-gray-900">{employee?.name || 'Employee'}</span> to enable biometric attendance.
           </p>
         </header>
 
@@ -138,15 +142,15 @@ export default function FacialRegistrationPage({ params }: { params: { id: strin
               <div className="flex gap-2">
                 <button 
                   onClick={() => { setActiveAngle('front'); setCapturedImage(null); }}
-                  className={`px-3 py-1 text-xs font-semibold rounded-full border ${activeAngle === 'front' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-white text-gray-600 border-gray-200'}`}
+                  className={`px-3 py-1 text-xs font-semibold rounded-full border ${activeAngle === 'front' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-white text-gray-600 border-gray-200'}`}
                 >Front</button>
                 <button 
                   onClick={() => { setActiveAngle('left'); setCapturedImage(null); }}
-                  className={`px-3 py-1 text-xs font-semibold rounded-full border ${activeAngle === 'left' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-white text-gray-600 border-gray-200'}`}
+                  className={`px-3 py-1 text-xs font-semibold rounded-full border ${activeAngle === 'left' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-white text-gray-600 border-gray-200'}`}
                 >Left</button>
                 <button 
                   onClick={() => { setActiveAngle('right'); setCapturedImage(null); }}
-                  className={`px-3 py-1 text-xs font-semibold rounded-full border ${activeAngle === 'right' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-white text-gray-600 border-gray-200'}`}
+                  className={`px-3 py-1 text-xs font-semibold rounded-full border ${activeAngle === 'right' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-white text-gray-600 border-gray-200'}`}
                 >Right</button>
               </div>
             </div>
@@ -157,7 +161,7 @@ export default function FacialRegistrationPage({ params }: { params: { id: strin
                   <Camera size={48} className="mx-auto text-gray-500 mb-2" />
                   <button 
                     onClick={() => setIsCapturing(true)}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
+                    className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-700"
                   >
                     Turn on Camera
                   </button>
@@ -178,7 +182,7 @@ export default function FacialRegistrationPage({ params }: { params: { id: strin
             {isCapturing && !capturedImage && (
               <button 
                 onClick={capture}
-                className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors flex justify-center items-center gap-2"
+                className="w-full bg-purple-600 text-white py-3 rounded-lg font-semibold hover:bg-purple-700 transition-colors flex justify-center items-center gap-2"
               >
                 <Camera size={18} /> Take Photo
               </button>
@@ -207,7 +211,7 @@ export default function FacialRegistrationPage({ params }: { params: { id: strin
 
           {/* Registered Faces Section */}
           <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-            <h2 className="text-lg font-bold text-gray-900 mb-4">Registered Profiles</h2>
+            <h2 className="text-lg font-bold text-gray-900 mb-4">Registered Profiles ({faces.length})</h2>
             {faces.length === 0 ? (
               <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
                 <AlertCircle size={32} className="mx-auto text-gray-400 mb-3" />
