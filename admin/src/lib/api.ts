@@ -1,9 +1,9 @@
 const envUrl = process.env.NEXT_PUBLIC_API_URL || '';
 
 export const API_BASE_URL =
-  envUrl && !envUrl.includes('your-render-service')
+  envUrl && !envUrl.includes('your-render-service') && !envUrl.includes('cafe-ho1d')
     ? envUrl
-    : 'https://cafe-ho1d.onrender.com';
+    : 'https://backend-gold-sigma-74.vercel.app';
 
 // Fast fetch with timeout to prevent page freeze
 export async function fastFetch(url: string, options: RequestInit = {}, timeoutMs = 6000) {
