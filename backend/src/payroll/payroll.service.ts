@@ -73,11 +73,11 @@ export class PayrollService {
       const hourlyEquivalent = salaryRateNum / 24;
       penaltyDeductions = (totalPenaltyMinutes / 60) * hourlyEquivalent;
     } else {
-      // Monthly salary rate is base salary
-      baseSalary = salaryRateNum;
-      overtimePay = totalOvertimeHours * overtimeRateNum;
+      // Monthly salary: calculate accumulated earned pay based on actual hours worked so far this month
       const dailyRate = salaryRateNum / 30;
       const hourlyEquivalent = dailyRate / 24;
+      baseSalary = totalWorkingHours * hourlyEquivalent;
+      overtimePay = totalOvertimeHours * overtimeRateNum;
       penaltyDeductions = (totalPenaltyMinutes / 60) * hourlyEquivalent;
     }
 

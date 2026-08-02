@@ -188,13 +188,17 @@ export default function PayrollPage() {
     let pendingCount = 0;
 
     payrollRecords.forEach(r => {
-      const base = Number(r.baseSalary || r.employee?.salaryRate || 0);
+      const monthlySalary = Number(r.employee?.salaryRate || r.baseSalary || 0);
+      const workHrs = Number(r.totalWorkingHours || 0);
       const ot = Number(r.overtimePay || 0);
       const pen = Number(r.penaltyDeductions || 0);
-      const net = Number(r.netSalary || 0);
 
-      totalBase += base;
-      totalEarned += (base + ot);
+      const hourlyRate = (monthlySalary / 30) / 24;
+      const earned = Math.round(workHrs * hourlyRate + ot);
+      const net = Math.max(0, earned - pen);
+
+      totalBase += monthlySalary;
+      totalEarned += earned;
       totalDeductions += pen;
       totalNet += net;
 
@@ -394,13 +398,14 @@ export default function PayrollPage() {
                 filteredRecords.map((record) => {
                   const empName = record.employee?.name || 'Unnamed Employee';
                   const empCode = record.employee?.employeeCode || record.employeeId || 'ID N/A';
-                  const baseVal = Number(record.baseSalary || record.employee?.salaryRate || 0);
+                  const monthlySalary = Number(record.employee?.salaryRate || record.baseSalary || 15000);
+                  const dailyRate = monthlySalary / 30;
+                  const hourlyRate = dailyRate / 24;
+                  const baseVal = monthlySalary;
                   let workHrs = Number(record.totalWorkingHours || 0);
                   const penaltyVal = Number(record.penaltyDeductions || 0);
-                  const netVal = Number(record.netSalary || 0);
                   const otHrs = Number(record.totalOvertimeHours || 0);
                   const otPay = Number(record.overtimePay || 0);
-                  const workAmount = Number(record.baseSalary || 0) + otPay;
 
                   const empAtts = attendances.filter(a => a.employeeId === record.employeeId);
                   const totalPenaltyMins = empAtts.reduce((sum, a) => sum + (Number((a as any).penaltyDeductionMinutes || (a as any).penaltyMinutes) || 0), 0);
@@ -429,6 +434,8 @@ export default function PayrollPage() {
                     }
                   }
 
+                  const workAmount = Math.round(workHrs * hourlyRate + otPay);
+                  const netVal = record.status === 'paid' ? Number(record.netSalary || 0) : Math.max(0, Math.round(workAmount - penaltyVal));
                   const initials = empName.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase();
 
                   return (
@@ -565,10 +572,12 @@ export default function PayrollPage() {
             filteredRecords.map((record) => {
               const empName = record.employee?.name || 'Unnamed Employee';
               const empCode = record.employee?.employeeCode || record.employeeId || 'ID N/A';
-              const baseVal = Number(record.baseSalary || record.employee?.salaryRate || 0);
+              const monthlySalary = Number(record.employee?.salaryRate || record.baseSalary || 15000);
+              const dailyRate = monthlySalary / 30;
+              const hourlyRate = dailyRate / 24;
+              const baseVal = monthlySalary;
               let workHrs = Number(record.totalWorkingHours || 0);
               const penaltyVal = Number(record.penaltyDeductions || 0);
-              const netVal = Number(record.netSalary || 0);
               const otHrs = Number(record.totalOvertimeHours || 0);
               const otPay = Number(record.overtimePay || 0);
 
@@ -599,6 +608,8 @@ export default function PayrollPage() {
                 }
               }
 
+              const workAmount = Math.round(workHrs * hourlyRate + otPay);
+              const netVal = record.status === 'paid' ? Number(record.netSalary || 0) : Math.max(0, Math.round(workAmount - penaltyVal));
               const initials = empName.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase();
 
               return (
