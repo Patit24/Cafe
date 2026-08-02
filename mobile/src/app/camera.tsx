@@ -57,6 +57,49 @@ export default function CameraScreen() {
   const [submittingAttendance, setSubmittingAttendance] = useState(false);
   const [noFaceDataError, setNoFaceDataError] = useState(false);
   const [capturedLiveFrame, setCapturedLiveFrame] = useState<string | null>(null);
+  const capturedFrameRef = useRef<string | null>(null);
+  const capturePromiseRef = useRef<Promise<string | null> | null>(null);
+
+  // Fast background frame capture without blocking UI or waiting for heavy JPEG/EXIF processing
+  const triggerFastCapture = useCallback(async (): Promise<string | null> => {
+    if (capturedFrameRef.current) return capturedFrameRef.current;
+    if (capturePromiseRef.current) return capturePromiseRef.current;
+
+    if (Platform.OS === 'web') {
+      const shot = webcamRef.current?.getScreenshot() || null;
+      if (shot) {
+        capturedFrameRef.current = shot;
+        setCapturedLiveFrame(shot);
+      }
+      return shot;
+    }
+
+    if (cameraViewRef.current) {
+      capturePromiseRef.current = (async () => {
+        try {
+          // quality: 0.35 and skipProcessing: true makes capturing nearly instantaneous on Android/iOS APKs!
+          const photo = await cameraViewRef.current?.takePictureAsync({
+            quality: 0.35,
+            base64: true,
+            skipProcessing: true,
+          });
+          const shot = photo?.base64 ? `data:image/jpeg;base64,${photo.base64}` : photo?.uri || null;
+          if (shot) {
+            capturedFrameRef.current = shot;
+            setCapturedLiveFrame(shot);
+          }
+          return shot;
+        } catch (err) {
+          console.error('Fast capture error:', err);
+          return null;
+        } finally {
+          capturePromiseRef.current = null;
+        }
+      })();
+      return capturePromiseRef.current;
+    }
+    return null;
+  }, []);
 
   // Fetch employee & face profiles
   useEffect(() => {
@@ -97,17 +140,8 @@ export default function CameraScreen() {
       return;
     }
 
-    // Capture live frame (web or native mobile APK)
-    let liveScreenshot = webcamRef.current?.getScreenshot() || capturedLiveFrame;
-    if (Platform.OS !== 'web' && cameraViewRef.current) {
-      try {
-        const photo = await cameraViewRef.current.takePictureAsync({ quality: 0.7, base64: true });
-        liveScreenshot = photo?.base64 ? `data:image/jpeg;base64,${photo.base64}` : photo?.uri || null;
-        setCapturedLiveFrame(liveScreenshot);
-      } catch (err) {
-        console.error('Mobile camera takePicture error:', err);
-      }
-    }
+    // Obtain live frame immediately from pre-captured buffer or via instant high-speed capture
+    const liveScreenshot = await triggerFastCapture();
 
     if (!liveScreenshot) {
       setMatchScore(0);
@@ -199,13 +233,15 @@ export default function CameraScreen() {
     } else {
       setStatus('failed');
     }
-  }, [employee, capturedLiveFrame]);
+  }, [employee, triggerFastCapture]);
 
-  // Handle Step State Transitions
+  // Handle Step State Transitions & High-Speed Background Capture
   useEffect(() => {
     if (loadingEmployee) return;
 
     if (status === 'detecting') {
+      // Start camera capture early in background during detection to eliminate waiting times
+      triggerFastCapture();
       const timer = setTimeout(() => {
         const actions: LivenessAction[] = ['blink', 'turn_left', 'turn_right', 'smile'];
         const randomAction = actions[Math.floor(Math.random() * actions.length)];
@@ -213,11 +249,13 @@ export default function CameraScreen() {
         setStatus('liveness');
         setLivenessProgress(0);
         setLivenessPassed(false);
-      }, 1200);
+      }, 350); // Cut detection delay from 1200ms to 350ms
       return () => clearTimeout(timer);
     }
 
     if (status === 'liveness') {
+      // Ensure fast background capture is underway while user performs liveness challenge
+      triggerFastCapture();
       const interval = setInterval(() => {
         setLivenessProgress((prev) => {
           if (prev >= 100) {
@@ -226,34 +264,25 @@ export default function CameraScreen() {
             setStatus('matching');
             return 100;
           }
-          return prev + 25;
+          return prev + 50; // Reaches 100% in just two steps (500ms total instead of 1600ms!)
         });
-      }, 400);
+      }, 250);
       return () => clearInterval(interval);
     }
 
     if (status === 'matching') {
       const timer = setTimeout(() => {
-        performFaceMatching(); // async — returns a promise, fire-and-forget
-      }, 1000);
+        performFaceMatching(); // Executes almost instantly since photo is pre-captured!
+      }, 50); // Reduced delay from 1000ms down to 50ms!
       return () => clearTimeout(timer);
     }
-  }, [status, loadingEmployee, performFaceMatching]);
+  }, [status, loadingEmployee, performFaceMatching, triggerFastCapture]);
 
   // Manual Photo Check-In Override
   const handleManualPhotoCheckIn = async () => {
     setSubmittingAttendance(true);
     try {
-      let shot = webcamRef.current?.getScreenshot() || capturedLiveFrame;
-      if (Platform.OS !== 'web' && cameraViewRef.current && !shot) {
-        try {
-          const photo = await cameraViewRef.current.takePictureAsync({ quality: 0.7, base64: true });
-          shot = photo?.base64 ? `data:image/jpeg;base64,${photo.base64}` : photo?.uri || null;
-          if (shot) setCapturedLiveFrame(shot);
-        } catch (e) {
-          console.error('Manual photo capture error on mobile:', e);
-        }
-      }
+      const shot = await triggerFastCapture();
       const finalPhoto = shot || employee?.faces?.[0]?.imageUrl || 'https://via.placeholder.com/150';
       
       const payload = {
@@ -296,15 +325,7 @@ export default function CameraScreen() {
   const handleCheckInAndStartDuty = async () => {
     setSubmittingAttendance(true);
     try {
-      let shot = capturedLiveFrame || webcamRef.current?.getScreenshot();
-      if (Platform.OS !== 'web' && cameraViewRef.current && !shot) {
-        try {
-          const photo = await cameraViewRef.current.takePictureAsync({ quality: 0.7, base64: true });
-          shot = photo?.base64 ? `data:image/jpeg;base64,${photo.base64}` : photo?.uri || null;
-        } catch (e) {
-          console.error('Check-in photo capture error on mobile:', e);
-        }
-      }
+      const shot = await triggerFastCapture();
       const finalPhoto = shot || employee?.faces?.[0]?.imageUrl || 'https://via.placeholder.com/150';
 
       const payload = {
@@ -551,6 +572,8 @@ export default function CameraScreen() {
               onPress={() => {
                 setStatus('detecting');
                 setLivenessPassed(false);
+                capturedFrameRef.current = null;
+                capturePromiseRef.current = null;
                 setCapturedLiveFrame(null);
                 setFailReason('none');
               }}

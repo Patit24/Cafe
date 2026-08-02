@@ -13,8 +13,10 @@ export default function AttendanceHome() {
 
   const [attendanceMap, setAttendanceMap] = useState<Record<string, any>>({});
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async (showSpinner = true) => {
+    if (showSpinner && employees.length === 0) {
+      setLoading(true);
+    }
     try {
       const [empRes, attRes] = await Promise.all([
         fetch(`${API_BASE_URL}/employees`),
@@ -95,7 +97,7 @@ export default function AttendanceHome() {
         animationType="fade"
         transparent={true}
         visible={modalVisible}
-        onShow={loadData}
+        onShow={() => loadData(false)}
         onRequestClose={() => setModalVisible(false)}
       >
         <View style={styles.modalOverlay}>

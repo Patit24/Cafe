@@ -51,25 +51,6 @@ export default function EmployeesPage() {
     fetchData();
   }, []);
 
-  const handleShiftChange = async (empId: string, newShiftId: string) => {
-    const targetShiftId = newShiftId === 'shift-none' ? null : newShiftId;
-    
-    // Optimistic UI update
-    setEmployees(prev => prev.map(emp => 
-      emp.id === empId ? { ...emp, shiftId: targetShiftId } : emp
-    ));
-
-    try {
-      await fetch(`${API_BASE_URL}/employees/${empId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shiftId: targetShiftId }),
-      });
-    } catch (err) {
-      console.error('Failed to update employee shift:', err);
-    }
-  };
-
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
     setIsDeleting(true);
@@ -189,19 +170,9 @@ export default function EmployeesPage() {
                     <td className="p-4">
                       <div className="flex items-center gap-2">
                         <Clock size={15} className="text-purple-600 flex-shrink-0" />
-                        <select
-                          value={emp.shiftId || 'shift-none'}
-                          onChange={(e) => handleShiftChange(emp.id, e.target.value)}
-                          className="bg-slate-50 border border-slate-200 rounded-md px-2.5 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-purple-600 focus:ring-1 focus:ring-purple-200 cursor-pointer"
-                        >
-                          <option value="shift-none">08:00 AM - 05:00 PM (Standard Day)</option>
-                          <option value="shift-1">09:00 AM - 06:00 PM (Regular Shift)</option>
-                          <option value="shift-2">07:00 AM - 03:00 PM (Morning Prep)</option>
-                          <option value="shift-3">02:00 PM - 10:00 PM (Evening Shift)</option>
-                          {shifts.map(s => (
-                            <option key={s.id} value={s.id}>{s.name}</option>
-                          ))}
-                        </select>
+                        <span className="bg-purple-50 border border-purple-200 text-purple-800 rounded-md px-2.5 py-1.5 text-xs font-semibold">
+                          {emp.shift ? `${new Date(emp.shift.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${new Date(emp.shift.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} (${emp.shift.name})` : '08:00 AM - 05:00 PM (Standard Day)'}
+                        </span>
                       </div>
                     </td>
                     <td className="p-4">

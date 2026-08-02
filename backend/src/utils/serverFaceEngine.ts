@@ -127,16 +127,16 @@ export async function extractFaceVectorFromBase64(base64Image: string): Promise<
     // 3. Create TensorFlow RGB Tensor
     tensor = tf.tensor3d(rgbData, [height, width, 3], 'int32') as tf.Tensor3D;
 
-    // 4. Detect single face and extract embedding vector
+    // 4. Detect single face using ultra-fast TinyFaceDetector first (3x faster in WASM)
     let result = await faceapi
-      .detectSingleFace(tensor as any, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.3 }))
+      .detectSingleFace(tensor as any, new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.2 }))
       .withFaceLandmarks()
       .withFaceDescriptor();
 
     if (!result) {
-      // Fallback to TinyFaceDetector
+      // Fallback to SsdMobilenetv1 if TinyFaceDetector missed the face
       result = await faceapi
-        .detectSingleFace(tensor as any, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.2 }))
+        .detectSingleFace(tensor as any, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.25 }))
         .withFaceLandmarks()
         .withFaceDescriptor();
     }

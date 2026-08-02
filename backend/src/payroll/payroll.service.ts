@@ -4,7 +4,16 @@ import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class PayrollService {
+  private cacheData: any = null;
+  private cacheTimestamp = 0;
+  private lastAutoRecalc = 0;
+
   constructor(private prisma: PrismaService) {}
+
+  private clearCache() {
+    this.cacheData = null;
+    this.cacheTimestamp = 0;
+  }
 
   async generatePayroll(
     employeeId: string,
@@ -135,41 +144,58 @@ export class PayrollService {
         console.error(`Failed to generate payroll for ${emp.id}`, err);
       }
     }
+    this.clearCache();
+    this.lastAutoRecalc = Date.now();
     return this.findAll();
   }
 
   async updateStatus(id: string, status: PayrollStatus) {
-    return this.prisma.payrollEntry.update({
+    const res = await this.prisma.payrollEntry.update({
       where: { id },
       data: { status },
     });
+    this.clearCache();
+    return res;
   }
 
   async findAll() {
-    const activeEmployees = await this.prisma.employee.findMany({
-      where: { isActive: true },
-    });
+    if (this.cacheData && Date.now() - this.cacheTimestamp < 15000) {
+      return this.cacheData;
+    }
+
     const now = new Date();
     const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
-    for (const emp of activeEmployees) {
-      const existing = await this.prisma.payrollEntry.findFirst({
-        where: { employeeId: emp.id },
+    // Only do full auto-recalculation once every 5 minutes, OR if an employee has zero records
+    const shouldFullRecalc = (Date.now() - this.lastAutoRecalc) > 300000;
+
+    if (shouldFullRecalc) {
+      const activeEmployees = await this.prisma.employee.findMany({
+        where: { isActive: true },
       });
-      if (!existing || existing.status === 'generated') {
-        try {
-          await this.generatePayroll(emp.id, firstDayOfMonth, lastDayOfMonth);
-        } catch (err) {
-          console.error(`Failed to auto-generate payroll for ${emp.id}`, err);
+      for (const emp of activeEmployees) {
+        const existing = await this.prisma.payrollEntry.findFirst({
+          where: { employeeId: emp.id },
+        });
+        if (!existing) {
+          try {
+            await this.generatePayroll(emp.id, firstDayOfMonth, lastDayOfMonth);
+          } catch (err) {
+            console.error(`Failed to auto-generate payroll for ${emp.id}`, err);
+          }
         }
       }
+      this.lastAutoRecalc = Date.now();
     }
 
-    return this.prisma.payrollEntry.findMany({
+    const results = await this.prisma.payrollEntry.findMany({
       include: { employee: true },
       orderBy: { createdAt: 'desc' },
     });
+    this.cacheData = results;
+    this.cacheTimestamp = Date.now();
+    return results;
   }
 
   findOne(id: string) {

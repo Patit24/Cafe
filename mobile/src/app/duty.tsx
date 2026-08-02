@@ -119,6 +119,36 @@ export default function DutyTimerScreen() {
     return `✓ Face Verified (${cleanScore}%)`;
   };
 
+  const getLateDetails = () => {
+    if (!attendanceRecord?.checkInTime) return null;
+    const checkIn = new Date(attendanceRecord.checkInTime);
+    const checkInMins = checkIn.getHours() * 60 + checkIn.getMinutes();
+    
+    let shiftStartMins = 480; // 08:00 AM by default
+    let assignedStr = '08:00 AM';
+    const shiftObj = employee?.shift || attendanceRecord?.shift;
+    if (shiftObj && shiftObj.startTime) {
+      const shiftDate = new Date(shiftObj.startTime);
+      shiftStartMins = shiftDate.getHours() * 60 + shiftDate.getMinutes();
+      assignedStr = new Date(shiftObj.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    const checkInTimeStr = checkIn.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const diff = checkInMins - shiftStartMins;
+    if (diff > 0) {
+      const hrs = Math.floor(diff / 60);
+      const mins = diff % 60;
+      let durStr = '';
+      if (hrs > 0 && mins > 0) durStr = `${hrs} hr ${mins} mins`;
+      else if (hrs > 0) durStr = `${hrs} hr${hrs > 1 ? 's' : ''}`;
+      else durStr = `${mins} mins`;
+      return { isLate: true, title: `⚠️ LATE ENTRY: Late by ${durStr}`, subtitle: `Assigned: ${assignedStr} • Checked in at ${checkInTimeStr}` };
+    }
+    return { isLate: false, title: `✓ ON TIME ENTRY`, subtitle: `Assigned: ${assignedStr} • Checked in at ${checkInTimeStr}` };
+  };
+
+  const lateInfo = getLateDetails();
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -145,6 +175,16 @@ export default function DutyTimerScreen() {
             <Text style={styles.auditBadgeText}>{getScoreBadgeText()}</Text>
             <Text style={styles.auditBadgeSubtext}>Location: Main Kiosk Terminal • Active Session</Text>
           </View>
+
+          {/* Late Entry / Arrival Status Banner */}
+          {lateInfo && (
+            <View style={[styles.lateCard, lateInfo.isLate ? styles.lateCardWarning : styles.lateCardSuccess]}>
+              <Text style={[styles.lateCardTitle, lateInfo.isLate ? styles.lateTextWarning : styles.lateTextSuccess]}>
+                {lateInfo.title}
+              </Text>
+              <Text style={styles.lateCardSubtitle}>{lateInfo.subtitle}</Text>
+            </View>
+          )}
         </View>
 
         {/* Dark Slate Digital Timer Box */}
@@ -399,5 +439,38 @@ const styles = StyleSheet.create({
     color: '#e11d48',
     fontSize: 16,
     fontWeight: '700',
+  },
+  lateCard: {
+    width: '100%',
+    borderWidth: 1.5,
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    marginTop: 12,
+    alignItems: 'center',
+  },
+  lateCardWarning: {
+    backgroundColor: '#fffbeb',
+    borderColor: '#fcd34d',
+  },
+  lateCardSuccess: {
+    backgroundColor: '#f0fdf4',
+    borderColor: '#86efac',
+  },
+  lateCardTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  lateTextWarning: {
+    color: '#b45309',
+  },
+  lateTextSuccess: {
+    color: '#15803d',
+  },
+  lateCardSubtitle: {
+    fontSize: 12,
+    color: '#475569',
+    marginTop: 3,
+    fontWeight: '600',
   },
 });

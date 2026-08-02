@@ -13,7 +13,66 @@ type LatePenaltyRule = {
 
 @Injectable()
 export class AttendanceService {
+  private cacheData: any = null;
+  private cacheTimestamp = 0;
+  private lastAutoCheck = 0;
+
   constructor(private prisma: PrismaService) {}
+
+  private clearCache() {
+    this.cacheData = null;
+    this.cacheTimestamp = 0;
+  }
+
+  async autoCompleteExpiredShifts() {
+    if (Date.now() - this.lastAutoCheck < 30000) return;
+    this.lastAutoCheck = Date.now();
+    try {
+      const activeRecords = await this.prisma.attendanceRecord.findMany({
+        where: { status: { in: ['working', 'on_break'] } },
+        include: { shift: true, employee: { include: { shift: true } } },
+      });
+
+      const now = Date.now();
+      for (const rec of activeRecords) {
+        if (!rec.checkInTime) continue;
+        const shift = rec.shift || rec.employee?.shift;
+        const requiredHours = shift && shift.requiredHours ? Number(shift.requiredHours) : 9;
+        const requiredMs = requiredHours * 3600000;
+        const checkInMs = new Date(rec.checkInTime).getTime();
+        const elapsedMs = now - checkInMs;
+
+        let shouldComplete = elapsedMs >= requiredMs;
+        if (shift && shift.endTime && !shouldComplete) {
+          const shiftEnd = new Date(rec.checkInTime);
+          shiftEnd.setHours(shift.endTime.getUTCHours(), shift.endTime.getUTCMinutes(), 0, 0);
+          if (now >= shiftEnd.getTime() && (now - shiftEnd.getTime()) > 900000) {
+            shouldComplete = true;
+          }
+        }
+
+        if (shouldComplete) {
+          const autoCheckOutTime = new Date(checkInMs + Math.min(elapsedMs, requiredMs));
+          const grossMinutes = Math.floor((autoCheckOutTime.getTime() - checkInMs) / 60000);
+          const penaltyMins = rec.penaltyDeductionMinutes || 0;
+          const netWorkingMinutes = Math.max(0, grossMinutes - penaltyMins);
+
+          await this.prisma.attendanceRecord.update({
+            where: { id: rec.id },
+            data: {
+              status: 'completed',
+              checkOutTime: autoCheckOutTime,
+              regularMinutes: grossMinutes,
+              netWorkingMinutes,
+            },
+          });
+          this.clearCache();
+        }
+      }
+    } catch (err) {
+      console.error('Failed in autoCompleteExpiredShifts:', err);
+    }
+  }
 
   async checkIn(
     employeeId: string,
@@ -78,7 +137,7 @@ export class AttendanceService {
       }
     }
 
-    return this.prisma.attendanceRecord.create({
+    const newRec = await this.prisma.attendanceRecord.create({
       data: {
         employeeId,
         shiftId: employee.shiftId,
@@ -93,6 +152,8 @@ export class AttendanceService {
         penaltyDeductionMinutes,
       },
     });
+    this.clearCache();
+    return newRec;
   }
 
   async startBreak(recordId: string) {
@@ -107,12 +168,14 @@ export class AttendanceService {
       data: { status: 'on_break' },
     });
 
-    return this.prisma.attendanceBreak.create({
+    const res = await this.prisma.attendanceBreak.create({
       data: {
         attendanceRecordId: recordId,
         startTime: new Date(),
       },
     });
+    this.clearCache();
+    return res;
   }
 
   async resumeDuty(breakId: string, recordId: string) {
@@ -121,10 +184,12 @@ export class AttendanceService {
       data: { status: 'working' },
     });
 
-    return this.prisma.attendanceBreak.update({
+    const res = await this.prisma.attendanceBreak.update({
       where: { id: breakId },
       data: { endTime: new Date() },
     });
+    this.clearCache();
+    return res;
   }
 
   async checkOut(recordId: string) {
@@ -169,7 +234,7 @@ export class AttendanceService {
       Math.round((grossEarnedMoney - penaltyMoneyDeduction) * 100) / 100,
     );
 
-    return this.prisma.attendanceRecord.update({
+    const updatedRec = await this.prisma.attendanceRecord.update({
       where: { id: recordId },
       data: {
         checkOutTime,
@@ -179,6 +244,8 @@ export class AttendanceService {
         netWorkingMinutes,
       },
     });
+    this.clearCache();
+    return updatedRec;
   }
 
   async getEmployeeHeatmap(employeeId: string, monthStr?: string) {
@@ -206,10 +273,47 @@ export class AttendanceService {
     return heatmapData;
   }
 
-  findAll() {
-    return this.prisma.attendanceRecord.findMany({
-      include: { employee: true, shift: true, breaks: true },
+  async findAll() {
+    if (this.cacheData && Date.now() - this.cacheTimestamp < 5000) {
+      return this.cacheData;
+    }
+    await this.autoCompleteExpiredShifts();
+
+    const records = await this.prisma.attendanceRecord.findMany({
+      select: {
+        id: true,
+        employeeId: true,
+        shiftId: true,
+        date: true,
+        checkInTime: true,
+        checkOutTime: true,
+        netWorkingMinutes: true,
+        breakMinutes: true,
+        regularMinutes: true,
+        overtimeMinutes: true,
+        penaltyDeductionMinutes: true,
+        faceMatchScore: true,
+        livenessPassed: true,
+        status: true,
+        deviceId: true,
+        gpsLocation: true,
+        createdAt: true,
+        employee: {
+          include: {
+            role: true,
+            department: true,
+            shift: true,
+          },
+        },
+        shift: true,
+        breaks: true,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 500,
     });
+    this.cacheData = records;
+    this.cacheTimestamp = Date.now();
+    return records;
   }
 
   findOne(id: string) {
