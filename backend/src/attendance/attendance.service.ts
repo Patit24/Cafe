@@ -1,5 +1,10 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  extractFaceVectorFromBase64,
+  euclideanDistance,
+  distanceToScore,
+} from '../utils/serverFaceEngine';
 
 type LatePenaltyRule = {
   lateMinutes: number;
@@ -17,10 +22,11 @@ export class AttendanceService {
     faceMatchScore: number,
     photoUrl?: string,
     livenessPassed: boolean = true,
+    isManualOverride: boolean = false,
   ) {
-    if (faceMatchScore < 85) {
+    if (!isManualOverride && faceMatchScore >= 0 && faceMatchScore < 60) {
       throw new BadRequestException(
-        'Face verification failed. Score below 85% threshold.',
+        'Face verification failed. Score below required 60% threshold.',
       );
     }
 
@@ -33,14 +39,18 @@ export class AttendanceService {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const existingRecord = await this.prisma.attendanceRecord.findFirst({
-      where: { employeeId, date: today },
+    const existingActiveRecord = await this.prisma.attendanceRecord.findFirst({
+      where: {
+        employeeId,
+        status: { in: ['working', 'on_break'] },
+      },
+      orderBy: { createdAt: 'desc' },
     });
 
-    if (existingRecord) {
-      throw new BadRequestException(
-        'Duplicate check-in for today is not allowed.',
-      );
+    if (existingActiveRecord) {
+      // Do not overwrite checkInTime or destroy previous sessions!
+      // Return existing active session cleanly.
+      return existingActiveRecord;
     }
 
     const checkInTime = new Date();
@@ -59,19 +69,11 @@ export class AttendanceService {
       const diffMinutes = Math.floor(diffMs / 60000);
 
       if (diffMinutes > 0) {
-        const rules = (employee.shift.latePenaltyRules as
-          LatePenaltyRule[] | null) || [
-          { lateMinutes: 30, deductHours: 2 },
-          { lateMinutes: 10, deductHours: 1 },
-        ];
-
-        rules.sort((a, b) => b.lateMinutes - a.lateMinutes);
-
-        for (const rule of rules) {
-          if (diffMinutes >= rule.lateMinutes) {
-            penaltyDeductionMinutes = rule.deductHours * 60;
-            break;
-          }
+        // Late Penalty Rules: 10 mins late -> 1 hr salary, 30 mins late -> 2 hrs salary
+        if (diffMinutes >= 30) {
+          penaltyDeductionMinutes = 120; // 2 hours
+        } else if (diffMinutes >= 10) {
+          penaltyDeductionMinutes = 60; // 1 hour
         }
       }
     }
@@ -84,9 +86,9 @@ export class AttendanceService {
         checkInTime,
         deviceId,
         gpsLocation,
-        faceMatchScore,
+        faceMatchScore: isManualOverride ? -1 : faceMatchScore,
         photoUrl: photoUrl || null,
-        livenessPassed: livenessPassed ?? true,
+        livenessPassed: isManualOverride ? false : (livenessPassed ?? true),
         status: 'working',
         penaltyDeductionMinutes,
       },
@@ -128,14 +130,80 @@ export class AttendanceService {
   async checkOut(recordId: string) {
     const checkOutTime = new Date();
 
-    // In a real scenario, this would calculate actual net working minutes and overtime
+    const record = await this.prisma.attendanceRecord.findUnique({
+      where: { id: recordId },
+      include: { employee: true, breaks: true },
+    });
+    if (!record) throw new BadRequestException('Attendance record not found');
+
+    const checkInMs = record.checkInTime ? record.checkInTime.getTime() : checkOutTime.getTime();
+    const grossMs = checkOutTime.getTime() - checkInMs;
+    const grossMinutes = Math.max(0, Math.floor(grossMs / 60000));
+    const penaltyMins = record.penaltyDeductionMinutes || 0;
+
+    // Calculate total break duration
+    let breakMinutes = 0;
+    for (const b of record.breaks) {
+      if (b.endTime) {
+        breakMinutes += Math.floor(
+          (b.endTime.getTime() - b.startTime.getTime()) / 60000,
+        );
+      }
+    }
+
+    const netWorkingMinutes = Math.max(
+      0,
+      grossMinutes - breakMinutes - penaltyMins,
+    );
+    const workedHours = Math.round((netWorkingMinutes / 60) * 100) / 100;
+
+    // Salary Math: e.g. Base ₹15,000 / 30 = ₹500/day -> ₹500 / 24 = ₹20.833/hr
+    const monthlySalary = (record.employee?.salaryRate ? Number(record.employee.salaryRate) : 0) || 15000;
+    const dailyRate = monthlySalary / 30;
+    const hourlyRate = dailyRate / 24;
+
+    const penaltyMoneyDeduction = (penaltyMins / 60) * hourlyRate;
+    const grossEarnedMoney = (grossMinutes / 60) * hourlyRate;
+    const netEarnedMoney = Math.max(
+      0,
+      Math.round((grossEarnedMoney - penaltyMoneyDeduction) * 100) / 100,
+    );
+
     return this.prisma.attendanceRecord.update({
       where: { id: recordId },
       data: {
         checkOutTime,
         status: 'completed',
+        regularMinutes: grossMinutes,
+        breakMinutes,
+        netWorkingMinutes,
       },
     });
+  }
+
+  async getEmployeeHeatmap(employeeId: string, monthStr?: string) {
+    const records = await this.prisma.attendanceRecord.findMany({
+      where: { employeeId },
+      orderBy: { date: 'asc' },
+    });
+
+    const heatmapData = records.map((rec) => {
+      let durationHours = 0;
+      if (rec.checkOutTime && rec.checkInTime) {
+        const ms = rec.checkOutTime.getTime() - rec.checkInTime.getTime();
+        durationHours = Math.round((ms / 3600000) * 100) / 100;
+      }
+
+      return {
+        date: rec.date.toISOString().split('T')[0],
+        hoursWorked: durationHours,
+        status: rec.status,
+        penaltyMinutes: rec.penaltyDeductionMinutes || 0,
+        faceMatchScore: rec.faceMatchScore,
+      };
+    });
+
+    return heatmapData;
   }
 
   findAll() {
@@ -149,5 +217,76 @@ export class AttendanceService {
       where: { id },
       include: { employee: true, shift: true, breaks: true },
     });
+  }
+
+  async verifyFace(employeeId: string, livePhotoBase64: string) {
+    if (!employeeId || !livePhotoBase64) {
+      throw new BadRequestException('Employee ID and live capture photo are required');
+    }
+
+    const employeeFaces = await this.prisma.employeeFace.findMany({
+      where: { employeeId },
+    });
+
+    if (!employeeFaces || employeeFaces.length === 0) {
+      return {
+        success: false,
+        reason: 'no_registered_faces',
+        score: 0,
+        bestAngle: 'No faces registered in database',
+      };
+    }
+
+    const storedEmbeddings: number[][] = [];
+    const angles: string[] = [];
+
+    for (const ef of employeeFaces) {
+      if (Array.isArray(ef.faceEmbedding) && ef.faceEmbedding.length === 128) {
+        storedEmbeddings.push(ef.faceEmbedding as number[]);
+        angles.push(ef.angle || 'Front View');
+      }
+    }
+
+    if (storedEmbeddings.length === 0) {
+      return {
+        success: false,
+        reason: 'old_embeddings',
+        score: 0,
+        bestAngle: 'Re-registration required (old format)',
+      };
+    }
+
+    // Extract 128D vector from live captured camera image
+    const liveVector = await extractFaceVectorFromBase64(livePhotoBase64);
+    if (!liveVector) {
+      return {
+        success: false,
+        reason: 'no_face',
+        score: 0,
+        bestAngle: 'No clean face detected in live photo',
+      };
+    }
+
+    let minDistance = Infinity;
+    let bestAngle = 'None';
+
+    for (let i = 0; i < storedEmbeddings.length; i++) {
+      const dist = euclideanDistance(liveVector, storedEmbeddings[i]);
+      if (dist < minDistance) {
+        minDistance = dist;
+        bestAngle = angles[i];
+      }
+    }
+
+    const score = distanceToScore(minDistance);
+    const passed = score >= 75 && minDistance <= 0.50;
+
+    return {
+      success: passed,
+      reason: passed ? 'none' : 'mismatch',
+      score,
+      bestAngle: `${bestAngle} (${Math.round(minDistance * 100) / 100} dist)`,
+      distance: minDistance,
+    };
   }
 }

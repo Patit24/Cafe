@@ -14,15 +14,34 @@ export type EmployeeFacePayload = {
 export class EmployeesService {
   constructor(private prisma: PrismaService) {}
 
-  create(createEmployeeDto: CreateEmployeeDto) {
+  async create(createEmployeeDto: any) {
+    const { role, ...dtoData } = createEmployeeDto;
+    let roleId = dtoData.roleId;
+
+    if (!roleId) {
+      const targetRole = (role && typeof role === 'string' && role.trim()) ? role.trim() : 'Kitchen Staff';
+      let r = await this.prisma.role.findFirst({
+        where: { name: { equals: targetRole, mode: 'insensitive' } },
+      });
+      if (!r) {
+        r = await this.prisma.role.create({ data: { name: targetRole } });
+      }
+      roleId = r.id;
+    }
+
     return this.prisma.employee.create({
-      data: createEmployeeDto,
+      data: {
+        ...dtoData,
+        roleId,
+      },
+      include: { role: true, department: true, shift: true, faces: true },
     });
   }
 
   findAll() {
     return this.prisma.employee.findMany({
       include: { department: true, role: true, shift: true, faces: true },
+      orderBy: { createdAt: 'desc' },
     });
   }
 
@@ -33,10 +52,28 @@ export class EmployeesService {
     });
   }
 
-  update(id: string, updateEmployeeDto: UpdateEmployeeDto) {
+  async update(id: string, updateEmployeeDto: any) {
+    const { role, ...dtoData } = updateEmployeeDto;
+    let roleId = dtoData.roleId;
+
+    if (role !== undefined) {
+      const targetRole = (role && typeof role === 'string' && role.trim()) ? role.trim() : 'Kitchen Staff';
+      let r = await this.prisma.role.findFirst({
+        where: { name: { equals: targetRole, mode: 'insensitive' } },
+      });
+      if (!r) {
+        r = await this.prisma.role.create({ data: { name: targetRole } });
+      }
+      roleId = r.id;
+    }
+
     return this.prisma.employee.update({
       where: { id },
-      data: updateEmployeeDto,
+      data: {
+        ...dtoData,
+        ...(roleId !== undefined ? { roleId } : {}),
+      },
+      include: { role: true, department: true, shift: true, faces: true },
     });
   }
 

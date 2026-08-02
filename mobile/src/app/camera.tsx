@@ -18,6 +18,7 @@ export default function CameraScreen() {
   const { employeeId } = useLocalSearchParams<{ employeeId: string }>();
   const [permission, requestPermission] = useCameraPermissions();
   const webcamRef = useRef<Webcam>(null);
+  const cameraViewRef = useRef<CameraView>(null);
 
   const [hasMounted, setHasMounted] = useState(false);
   const [employee, setEmployee] = useState<any>(null);
@@ -29,6 +30,10 @@ export default function CameraScreen() {
 
   useEffect(() => {
     setHasMounted(true);
+    // Request camera permissions immediately when opened on mobile APK
+    if (Platform.OS !== 'web' && (!permission || !permission.granted)) {
+      requestPermission();
+    }
     // Pre-load neural face models in background
     if (Platform.OS === 'web') {
       loadFaceApiModels().then((ok) => {
@@ -39,7 +44,7 @@ export default function CameraScreen() {
       setModelsReady(false);
       setModelsLoading(false);
     }
-  }, []);
+  }, [permission]);
 
   // Liveness Challenge state
   const [livenessAction, setLivenessAction] = useState<LivenessAction>('blink');
@@ -83,7 +88,7 @@ export default function CameraScreen() {
       (f: any) => f.faceEmbedding && Array.isArray(f.faceEmbedding) && f.faceEmbedding.length > 0
     );
 
-    if (validFaces.length === 0) {
+    if (validFaces.length === 0 && Platform.OS === 'web') {
       setMatchScore(0);
       setBestAngle('None');
       setStatus('failed');
@@ -92,8 +97,18 @@ export default function CameraScreen() {
       return;
     }
 
-    // Capture live webcam frame
-    const liveScreenshot = webcamRef.current?.getScreenshot() || capturedLiveFrame;
+    // Capture live frame (web or native mobile APK)
+    let liveScreenshot = webcamRef.current?.getScreenshot() || capturedLiveFrame;
+    if (Platform.OS !== 'web' && cameraViewRef.current) {
+      try {
+        const photo = await cameraViewRef.current.takePictureAsync({ quality: 0.7, base64: true });
+        liveScreenshot = photo?.base64 ? `data:image/jpeg;base64,${photo.base64}` : photo?.uri || null;
+        setCapturedLiveFrame(liveScreenshot);
+      } catch (err) {
+        console.error('Mobile camera takePicture error:', err);
+      }
+    }
+
     if (!liveScreenshot) {
       setMatchScore(0);
       setStatus('failed');
@@ -101,8 +116,55 @@ export default function CameraScreen() {
       return;
     }
 
-    // Generate REAL 128D neural face descriptor
-    const liveVector = await generateNeuralFaceEmbedding(liveScreenshot);
+    if (Platform.OS !== 'web') {
+      // On Android APK / Native mobile, perform secure Server-Side Neural Face Verification
+      try {
+        const res = await fetch(`${API_BASE_URL}/attendance/verify-face`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            employeeId: employeeId || employee?.id,
+            livePhotoBase64: liveScreenshot,
+          }),
+        });
+        const data = await res.json();
+
+        if (!res.ok || data?.reason === 'no_registered_faces' || data?.reason === 'old_embeddings') {
+          setMatchScore(0);
+          setBestAngle('No valid registered faces found');
+          setStatus('failed');
+          setNoFaceDataError(true);
+          setFailReason(data?.reason || 'no_registered_faces');
+          return;
+        }
+
+        if (!data.success) {
+          setMatchScore(data.score || 0);
+          setBestAngle(data.bestAngle || 'Mismatch');
+          setNoFaceDataError(false);
+          setFailReason(data.reason || 'mismatch');
+          setStatus('failed');
+          return;
+        }
+
+        setMatchScore(data.score || 95);
+        setBestAngle(data.bestAngle || 'Front View (Server AI)');
+        setNoFaceDataError(false);
+        setFailReason('none');
+        setStatus('success');
+        return;
+      } catch (error) {
+        console.error('Server biometric verification failed:', error);
+        setMatchScore(0);
+        setBestAngle('Server Connection Error');
+        setStatus('failed');
+        setFailReason('mismatch');
+        return;
+      }
+    }
+
+    // Generate REAL 128D neural face descriptor on web
+    const liveVector = await generateNeuralFaceEmbedding(liveScreenshot!);
 
     if (!liveVector) {
       setMatchScore(0);
@@ -148,9 +210,10 @@ export default function CameraScreen() {
         const actions: LivenessAction[] = ['blink', 'turn_left', 'turn_right', 'smile'];
         const randomAction = actions[Math.floor(Math.random() * actions.length)];
         setLivenessAction(randomAction);
-        setLivenessProgress(0);
         setStatus('liveness');
-      }, 1800);
+        setLivenessProgress(0);
+        setLivenessPassed(false);
+      }, 1200);
       return () => clearTimeout(timer);
     }
 
@@ -160,13 +223,6 @@ export default function CameraScreen() {
           if (prev >= 100) {
             clearInterval(interval);
             setLivenessPassed(true);
-            
-            // Capture webcam screenshot right as liveness completes
-            if (webcamRef.current) {
-              const shot = webcamRef.current.getScreenshot();
-              if (shot) setCapturedLiveFrame(shot);
-            }
-            
             setStatus('matching');
             return 100;
           }
@@ -184,17 +240,30 @@ export default function CameraScreen() {
     }
   }, [status, loadingEmployee, performFaceMatching]);
 
-  // Submit Attendance Record
-  const handleCheckInAndStartDuty = async () => {
+  // Manual Photo Check-In Override
+  const handleManualPhotoCheckIn = async () => {
     setSubmittingAttendance(true);
     try {
+      let shot = webcamRef.current?.getScreenshot() || capturedLiveFrame;
+      if (Platform.OS !== 'web' && cameraViewRef.current && !shot) {
+        try {
+          const photo = await cameraViewRef.current.takePictureAsync({ quality: 0.7, base64: true });
+          shot = photo?.base64 ? `data:image/jpeg;base64,${photo.base64}` : photo?.uri || null;
+          if (shot) setCapturedLiveFrame(shot);
+        } catch (e) {
+          console.error('Manual photo capture error on mobile:', e);
+        }
+      }
+      const finalPhoto = shot || employee?.faces?.[0]?.imageUrl || 'https://via.placeholder.com/150';
+      
       const payload = {
         employeeId: employeeId || employee?.id,
         deviceId: 'Kiosk-Device-EL90',
         gpsLocation: '12.9716° N, 77.5946° E (Kitchen Main)',
-        faceMatchScore: matchScore,
-        livenessPassed,
-        photoUrl: capturedLiveFrame || employee?.faces?.[0]?.imageUrl || 'https://via.placeholder.com/150',
+        faceMatchScore: -1,
+        isManualOverride: true,
+        livenessPassed: false,
+        photoUrl: finalPhoto,
       };
 
       const response = await fetch(`${API_BASE_URL}/attendance/check-in`, {
@@ -210,9 +279,59 @@ export default function CameraScreen() {
       router.replace({
         pathname: '/duty',
         params: {
+          employeeId: employeeId || employee?.id,
           employeeName: employee?.name || 'Kitchen Staff',
-          matchScore: matchScore.toString(),
-          photoUrl: payload.photoUrl,
+          score: 'Manual Photo Override',
+        },
+      });
+    } catch (err) {
+      console.error('Manual check-in error:', err);
+      alert('Network error submitting attendance. Please try again.');
+    } finally {
+      setSubmittingAttendance(false);
+    }
+  };
+
+  // Submit Attendance Record
+  const handleCheckInAndStartDuty = async () => {
+    setSubmittingAttendance(true);
+    try {
+      let shot = capturedLiveFrame || webcamRef.current?.getScreenshot();
+      if (Platform.OS !== 'web' && cameraViewRef.current && !shot) {
+        try {
+          const photo = await cameraViewRef.current.takePictureAsync({ quality: 0.7, base64: true });
+          shot = photo?.base64 ? `data:image/jpeg;base64,${photo.base64}` : photo?.uri || null;
+        } catch (e) {
+          console.error('Check-in photo capture error on mobile:', e);
+        }
+      }
+      const finalPhoto = shot || employee?.faces?.[0]?.imageUrl || 'https://via.placeholder.com/150';
+
+      const payload = {
+        employeeId: employeeId || employee?.id,
+        deviceId: 'Kiosk-Device-EL90',
+        gpsLocation: '12.9716° N, 77.5946° E (Kitchen Main)',
+        faceMatchScore: matchScore,
+        livenessPassed,
+        photoUrl: finalPhoto,
+      };
+
+      const response = await fetch(`${API_BASE_URL}/attendance/check-in`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server returned status ${response.status}`);
+      }
+
+      router.replace({
+        pathname: '/duty',
+        params: {
+          employeeId: employeeId || employee?.id,
+          employeeName: employee?.name || 'Kitchen Staff',
+          score: matchScore.toString(),
         },
       });
     } catch (err) {
@@ -244,7 +363,27 @@ export default function CameraScreen() {
     );
   }
 
-  if (modelsLoading) {
+  // Handle mobile APK camera permissions if not granted
+  if (Platform.OS !== 'web' && (!permission || !permission.granted)) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.permissionContainer}>
+          <Text style={styles.permissionTitle}>📸 Camera Access Required</Text>
+          <Text style={styles.permissionSubtitle}>
+            To perform neural face verification and capture employee attendance photos on this mobile device, please allow camera access.
+          </Text>
+          <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
+            <Text style={styles.permissionButtonText}>Grant Camera Permission</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.cancelButton} onPress={() => router.replace('/')}>
+            <Text style={styles.cancelButtonText}>⬅️ Back to Kiosk Home</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (modelsLoading && Platform.OS === 'web') {
     return (
       <SafeAreaView style={styles.container}>
         <View style={{ alignItems: 'center', marginTop: 100, padding: 24 }}>
@@ -281,7 +420,7 @@ export default function CameraScreen() {
             style={{ width: '100%', height: '100%', objectFit: 'cover' } as any}
           />
         ) : (
-          <CameraView style={styles.cameraView} facing="front" />
+          <CameraView ref={cameraViewRef} style={styles.cameraView} facing="front" />
         )}
 
         {/* Oval Guide Overlay */}
@@ -293,6 +432,19 @@ export default function CameraScreen() {
             status === 'failed' && { borderColor: '#EB5757' },
           ]}
         />
+
+        {/* Real-time Telemetry Debug HUD Overlay */}
+        <View style={styles.debugHud}>
+          <Text style={styles.debugHudTitle}>⚡ AI TELEMETRY HUD</Text>
+          <Text style={styles.debugHudText}>Model: face-api 128D (CDN)</Text>
+          <Text style={styles.debugHudText}>Status: {status.toUpperCase()}</Text>
+          {matchScore > 0 && (
+            <Text style={styles.debugHudText}>
+              Similarity: {matchScore}% (Threshold: 70%)
+            </Text>
+          )}
+          {bestAngle ? <Text style={styles.debugHudText}>Match Angle: {bestAngle}</Text> : null}
+        </View>
 
         {/* Scanning Bar */}
         {status === 'detecting' && <View style={styles.scanLine} />}
@@ -383,6 +535,18 @@ export default function CameraScreen() {
               </>
             )}
             <TouchableOpacity
+              style={styles.manualPhotoButton}
+              onPress={handleManualPhotoCheckIn}
+              disabled={submittingAttendance}
+            >
+              {submittingAttendance ? (
+                <ActivityIndicator color="#ffffff" />
+              ) : (
+                <Text style={styles.manualPhotoButtonText}>📸 Take Photo & Start Duty (Manual Override)</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
               style={styles.retryButton}
               onPress={() => {
                 setStatus('detecting');
@@ -455,6 +619,27 @@ const styles = StyleSheet.create({
     borderColor: '#38bdf8',
     borderStyle: 'dashed',
   },
+  debugHud: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.4)',
+  },
+  debugHudTitle: {
+    color: '#f59e0b',
+    fontSize: 9,
+    fontWeight: '700',
+  },
+  debugHudText: {
+    color: '#cbd5e1',
+    fontSize: 9,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
   scanLine: {
     position: 'absolute',
     top: '40%',
@@ -468,7 +653,7 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
   },
   loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(15, 23, 42, 0.85)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -481,7 +666,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   successOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(34, 197, 94, 0.15)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -502,7 +687,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   failedOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(239, 68, 68, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -614,6 +799,19 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     marginTop: 12,
+  },
+  manualPhotoButton: {
+    backgroundColor: '#38bdf8',
+    width: '100%',
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  manualPhotoButtonText: {
+    color: '#0f172a',
+    fontSize: 14,
+    fontWeight: '700',
   },
   retryButtonText: {
     color: '#ffffff',

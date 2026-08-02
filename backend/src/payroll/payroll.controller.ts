@@ -16,6 +16,11 @@ export class PayrollController {
     );
   }
 
+  @Post('generate-all')
+  generateAll() {
+    return this.payrollService.generateAll();
+  }
+
   @Get()
   findAll() {
     return this.payrollService.findAll();

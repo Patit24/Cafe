@@ -23,122 +23,119 @@ export class PayrollService {
           gte: periodStart,
           lte: periodEnd,
         },
-        status: 'completed',
       },
     });
 
-    let totalWorkingHours = 0;
+    let totalWorkedMinutes = 0;
     let totalOvertimeHours = 0;
     let totalPenaltyMinutes = 0;
 
     attendances.forEach((record) => {
-      totalWorkingHours += (record.regularMinutes || 0) / 60;
+      totalPenaltyMinutes += (record.penaltyDeductionMinutes || 0);
       totalOvertimeHours += (record.overtimeMinutes || 0) / 60;
-      totalPenaltyMinutes += record.penaltyDeductionMinutes || 0;
+      if (record.checkOutTime && record.checkInTime) {
+        const ms = new Date(record.checkOutTime).getTime() - new Date(record.checkInTime).getTime();
+        totalWorkedMinutes += Math.max(0, Math.floor(ms / 60000));
+      } else if (record.status === 'working' && record.checkInTime) {
+        const ms = Date.now() - new Date(record.checkInTime).getTime();
+        totalWorkedMinutes += Math.max(0, Math.floor(ms / 60000));
+      } else if (record.regularMinutes && record.regularMinutes > 0) {
+        totalWorkedMinutes += record.regularMinutes;
+      }
     });
+
+    const totalWorkingHours = totalWorkedMinutes / 60;
 
     let baseSalary = 0;
     let overtimePay = 0;
     let penaltyDeductions = 0;
-    let unauthorizedAbsenceDeductions = 0;
 
-    // Fetch leaves for this period
-    const leaves = await this.prisma.leaveApplication.findMany({
-      where: {
-        employeeId,
-        startDate: { lte: periodEnd },
-        endDate: { gte: periodStart },
-      },
-    });
-
-    // Check for unauthorized absences
-    // For simplicity, assuming everyday from periodStart to periodEnd is a potential working day
-    let unauthorizedAbsenceDays = 0;
-    const current = new Date(periodStart);
-    while (current <= periodEnd) {
-      const dateStr = current.toISOString().split('T')[0];
-      const hasAttendance = attendances.some(
-        (a) => a.date.toISOString().split('T')[0] === dateStr,
-      );
-
-      let hasLeave = false;
-      for (const leave of leaves) {
-        if (current >= leave.startDate && current <= leave.endDate) {
-          hasLeave = true;
-          break;
-        }
-      }
-
-      if (!hasAttendance && !hasLeave) {
-        unauthorizedAbsenceDays++;
-      }
-      current.setDate(current.getDate() + 1);
-    }
+    const salaryRateNum = Number(employee.salaryRate || 0);
+    const overtimeRateNum = Number(employee.overtimeRate || 0);
 
     if (employee.salaryType === 'hourly') {
-      baseSalary = totalWorkingHours * Number(employee.salaryRate);
-      overtimePay = totalOvertimeHours * Number(employee.overtimeRate);
-      penaltyDeductions =
-        (totalPenaltyMinutes / 60) * Number(employee.salaryRate);
-      unauthorizedAbsenceDeductions = 0; // Hourly employees don't get deducted for not working, they just don't get paid.
+      baseSalary = totalWorkingHours * salaryRateNum;
+      overtimePay = totalOvertimeHours * overtimeRateNum;
+      penaltyDeductions = (totalPenaltyMinutes / 60) * salaryRateNum;
     } else if (employee.salaryType === 'daily') {
-      const daysWorked = attendances.length;
-      baseSalary = daysWorked * Number(employee.salaryRate);
-
-      // Add paid leaves to base salary
-      const paidLeaveDays = leaves.reduce((total, leave) => {
-        if (leave.type === 'paid') {
-          // Calculate overlap
-          const start = new Date(
-            Math.max(leave.startDate.getTime(), periodStart.getTime()),
-          );
-          const end = new Date(
-            Math.min(leave.endDate.getTime(), periodEnd.getTime()),
-          );
-          const days =
-            Math.floor(
-              (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24),
-            ) + 1;
-          return total + (days > 0 ? days : 0);
-        }
-        return total;
-      }, 0);
-      baseSalary += paidLeaveDays * Number(employee.salaryRate);
-
-      overtimePay = totalOvertimeHours * Number(employee.overtimeRate);
-      const hourlyEquivalent = Number(employee.salaryRate) / 8;
+      const daysWorked = attendances.length || 1;
+      baseSalary = daysWorked * salaryRateNum;
+      overtimePay = totalOvertimeHours * overtimeRateNum;
+      const hourlyEquivalent = salaryRateNum / 24;
       penaltyDeductions = (totalPenaltyMinutes / 60) * hourlyEquivalent;
-      unauthorizedAbsenceDeductions = 0; // Daily employees just don't earn for absences.
-    } else if (employee.salaryType === 'monthly') {
-      baseSalary = Number(employee.salaryRate);
-      overtimePay = totalOvertimeHours * Number(employee.overtimeRate);
-      const hourlyEquivalent = Number(employee.salaryRate) / 240;
+    } else {
+      // Monthly salary rate is base salary
+      baseSalary = salaryRateNum;
+      overtimePay = totalOvertimeHours * overtimeRateNum;
+      const dailyRate = salaryRateNum / 30;
+      const hourlyEquivalent = dailyRate / 24;
       penaltyDeductions = (totalPenaltyMinutes / 60) * hourlyEquivalent;
-
-      const dailyEquivalent = Number(employee.salaryRate) / 30; // Assuming 30 days
-      unauthorizedAbsenceDeductions = unauthorizedAbsenceDays * dailyEquivalent;
     }
 
-    const netSalary =
-      baseSalary +
-      overtimePay -
-      penaltyDeductions -
-      unauthorizedAbsenceDeductions;
+    // Round to 2 decimal places
+    baseSalary = Math.round(baseSalary * 100) / 100;
+    overtimePay = Math.round(overtimePay * 100) / 100;
+    penaltyDeductions = Math.round(penaltyDeductions * 100) / 100;
+
+    const netSalary = Math.max(0, Math.round((baseSalary + overtimePay - penaltyDeductions) * 100) / 100);
+
+    // Check if there is an existing pending (generated) payroll record for this employee
+    const existingEntry = await this.prisma.payrollEntry.findFirst({
+      where: {
+        employeeId,
+        status: 'generated',
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (existingEntry) {
+      return this.prisma.payrollEntry.update({
+        where: { id: existingEntry.id },
+        data: {
+          periodStart,
+          periodEnd,
+          totalWorkingHours: Math.round(totalWorkingHours * 100) / 100,
+          totalOvertimeHours: Math.round(totalOvertimeHours * 100) / 100,
+          baseSalary,
+          overtimePay,
+          penaltyDeductions,
+          netSalary,
+        },
+      });
+    }
 
     return this.prisma.payrollEntry.create({
       data: {
         employeeId,
         periodStart,
         periodEnd,
-        totalWorkingHours,
-        totalOvertimeHours,
+        totalWorkingHours: Math.round(totalWorkingHours * 100) / 100,
+        totalOvertimeHours: Math.round(totalOvertimeHours * 100) / 100,
         baseSalary,
         overtimePay,
-        penaltyDeductions: penaltyDeductions + unauthorizedAbsenceDeductions, // Storing together for simplicity, or we can add a new field. Let's just add it to penaltyDeductions.
+        penaltyDeductions,
         netSalary,
         status: 'generated',
       },
     });
+  }
+
+  async generateAll() {
+    const activeEmployees = await this.prisma.employee.findMany({
+      where: { isActive: true },
+    });
+    const now = new Date();
+    const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+    for (const emp of activeEmployees) {
+      try {
+        await this.generatePayroll(emp.id, firstDayOfMonth, lastDayOfMonth);
+      } catch (err) {
+        console.error(`Failed to generate payroll for ${emp.id}`, err);
+      }
+    }
+    return this.findAll();
   }
 
   async updateStatus(id: string, status: PayrollStatus) {
@@ -148,8 +145,31 @@ export class PayrollService {
     });
   }
 
-  findAll() {
-    return this.prisma.payrollEntry.findMany({ include: { employee: true } });
+  async findAll() {
+    const activeEmployees = await this.prisma.employee.findMany({
+      where: { isActive: true },
+    });
+    const now = new Date();
+    const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+    for (const emp of activeEmployees) {
+      const existing = await this.prisma.payrollEntry.findFirst({
+        where: { employeeId: emp.id },
+      });
+      if (!existing || existing.status === 'generated') {
+        try {
+          await this.generatePayroll(emp.id, firstDayOfMonth, lastDayOfMonth);
+        } catch (err) {
+          console.error(`Failed to auto-generate payroll for ${emp.id}`, err);
+        }
+      }
+    }
+
+    return this.prisma.payrollEntry.findMany({
+      include: { employee: true },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   findOne(id: string) {

@@ -12,9 +12,10 @@ export class AttendanceController {
       body.employeeId,
       body.deviceId,
       body.gpsLocation,
-      body.faceMatchScore,
+      body.faceMatchScore ?? -1,
       body.photoUrl,
       body.livenessPassed,
+      body.isManualOverride ?? false,
     );
   }
 
@@ -36,9 +37,21 @@ export class AttendanceController {
     return this.attendanceService.checkOut(recordId);
   }
 
+  @Post('verify-face')
+  verifyFace(
+    @Body() body: { employeeId: string; livePhotoBase64: string },
+  ) {
+    return this.attendanceService.verifyFace(body.employeeId, body.livePhotoBase64);
+  }
+
   @Get()
   findAll() {
     return this.attendanceService.findAll();
+  }
+
+  @Get('heatmap/:employeeId')
+  getEmployeeHeatmap(@Param('employeeId') employeeId: string) {
+    return this.attendanceService.getEmployeeHeatmap(employeeId);
   }
 
   @Get(':id')

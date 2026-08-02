@@ -33,6 +33,10 @@ export class CreateEmployeeDto {
   roleId?: string;
 
   @IsOptional()
+  @IsString()
+  role?: string;
+
+  @IsOptional()
   @IsUUID()
   shiftId?: string;
 

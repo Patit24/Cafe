@@ -19,16 +19,19 @@ export class CreateAttendanceDto {
   @IsString()
   gpsLocation!: string;
 
+  @IsOptional()
   @IsNumber()
-  @Min(0)
-  @Max(100)
-  faceMatchScore!: number;
+  faceMatchScore?: number;
 
   @IsOptional()
-  @IsUrl()
+  @IsString()
   photoUrl?: string;
 
   @IsOptional()
   @IsBoolean()
   livenessPassed?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isManualOverride?: boolean;
 }

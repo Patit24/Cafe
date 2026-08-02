@@ -11,20 +11,40 @@ export default function AttendanceHome() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  const loadEmployees = () => {
+  const [attendanceMap, setAttendanceMap] = useState<Record<string, any>>({});
+
+  const loadData = async () => {
     setLoading(true);
-    fetch(`${API_BASE_URL}/employees`)
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) setEmployees(data);
-      })
-      .catch(err => console.error('Failed to fetch employees:', err))
-      .finally(() => setLoading(false));
+    try {
+      const [empRes, attRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/employees`),
+        fetch(`${API_BASE_URL}/attendance`),
+      ]);
+
+      const empData = await empRes.json();
+      const attData = await attRes.json();
+
+      if (Array.isArray(empData)) setEmployees(empData);
+
+      if (Array.isArray(attData)) {
+        const map: Record<string, any> = {};
+        for (const att of attData) {
+          if (att.status === 'working' || att.status === 'on_break') {
+            map[att.employeeId] = att;
+          }
+        }
+        setAttendanceMap(map);
+      }
+    } catch (err) {
+      console.error('Failed to fetch kiosk data:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    loadEmployees();
+    loadData();
     return () => clearInterval(timer);
   }, []);
 
@@ -35,11 +55,18 @@ export default function AttendanceHome() {
     (emp.name || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleSelectEmployee = (employeeId: string) => {
+  const handleSelectEmployee = (emp: any) => {
     setModalVisible(false);
     setSearchQuery('');
-    // Navigate to camera and pass the employee ID
-    router.push(`/camera?employeeId=${employeeId}`);
+    
+    const activeAtt = attendanceMap[emp.id];
+    if (activeAtt) {
+      // Already checked in / working -> Go straight to active duty screen
+      router.push(`/duty?employeeId=${emp.id}&employeeName=${encodeURIComponent(emp.name)}&score=${activeAtt.faceMatchScore === '-1' ? 'Manual Photo' : 'Verified'}`);
+    } else {
+      // Off duty -> Go to camera for face or manual photo check-in
+      router.push(`/camera?employeeId=${emp.id}`);
+    }
   };
 
   return (
@@ -65,43 +92,77 @@ export default function AttendanceHome() {
       </View>
 
       <Modal
-        animationType="slide"
+        animationType="fade"
         transparent={true}
         visible={modalVisible}
-        onShow={loadEmployees}
+        onShow={loadData}
         onRequestClose={() => setModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Employee</Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <Text style={styles.closeText}>Cancel</Text>
+              <View>
+                <Text style={styles.modalTitle}>Select Employee Profile</Text>
+                <Text style={styles.modalSubTitle}>Choose your profile to check in or view active duty</Text>
+              </View>
+              <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.closeButton}>
+                <Text style={styles.closeButtonText}>✕</Text>
               </TouchableOpacity>
             </View>
-            
+
             <TextInput
               style={styles.searchInput}
-              placeholder="Search your name..."
-              placeholderTextColor="#74777d"
+              placeholder="🔍 Type your name..."
+              placeholderTextColor="#94a3b8"
               value={searchQuery}
               onChangeText={setSearchQuery}
             />
 
             <FlatList
               data={filteredEmployees}
-              keyExtractor={item => item.id}
-              renderItem={({ item }) => (
-                <TouchableOpacity 
-                  style={styles.employeeItem}
-                  onPress={() => handleSelectEmployee(item.id)}
-                >
-                  <Text style={styles.employeeName}>{item.name}</Text>
-                  <Text style={styles.employeeRole}>{item.role?.name || 'Kitchen Staff'}</Text>
-                </TouchableOpacity>
-              )}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={{ paddingBottom: 16 }}
+              renderItem={({ item }) => {
+                const activeAtt = attendanceMap[item.id];
+                const isWorking = !!activeAtt;
+                const isBreak = activeAtt?.status === 'on_break';
+
+                return (
+                  <TouchableOpacity 
+                    style={[styles.employeeCard, isWorking && styles.employeeCardWorking]} 
+                    onPress={() => handleSelectEmployee(item)}
+                  >
+                    <View style={styles.avatarCircle}>
+                      <Text style={styles.avatarText}>
+                        {(item.name || 'EL').substring(0, 2).toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={styles.employeeInfo}>
+                      <Text style={styles.employeeNameText}>{item.name}</Text>
+                      <Text style={styles.employeeRoleText}>{item.role?.name || 'Kitchen Staff'}</Text>
+                    </View>
+
+                    {/* Real-time Duty Status Badge */}
+                    <View style={[
+                      styles.statusBadge, 
+                      isWorking ? (isBreak ? styles.statusBreak : styles.statusWorking) : styles.statusOffDuty
+                    ]}>
+                      <Text style={[
+                        styles.statusBadgeText,
+                        isWorking ? (isBreak ? styles.statusBreakText : styles.statusWorkingText) : styles.statusOffDutyText
+                      ]}>
+                        {isWorking ? (isBreak ? '☕ ON BREAK' : '🟢 WORKING') : '🔴 OFF DUTY'}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              }}
               ListEmptyComponent={
-                <Text style={styles.emptyText}>No employees found.</Text>
+                <View style={styles.emptyContainer}>
+                  <Text style={styles.emptyText}>
+                    {loading ? 'Loading employees from backend...' : 'No matching employees found.'}
+                  </Text>
+                </View>
               }
             />
           </View>
@@ -192,60 +253,149 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
     justifyContent: 'flex-end',
   },
-  modalContent: {
+  modalContainer: {
     backgroundColor: '#ffffff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     padding: 24,
-    height: '70%',
+    height: '75%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 10,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
   },
   modalTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#041627',
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#0f172a',
   },
-  closeText: {
+  modalSubTitle: {
+    fontSize: 13,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  closeButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeButtonText: {
     fontSize: 16,
-    color: '#005a9e',
-    fontWeight: '600',
+    color: '#475569',
+    fontWeight: '700',
   },
   searchInput: {
-    backgroundColor: '#f0f1f3',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 8,
+    paddingVertical: 14,
+    borderRadius: 14,
+    fontSize: 15,
+    marginBottom: 18,
+    color: '#0f172a',
+    fontWeight: '500',
+  },
+  employeeCard: {
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    borderRadius: 16,
+    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  employeeCardWorking: {
+    borderColor: '#86efac',
+    backgroundColor: '#f0fdf4',
+  },
+  avatarCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#7c3aed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  avatarText: {
+    color: '#ffffff',
+    fontWeight: '700',
     fontSize: 16,
-    marginBottom: 16,
-    color: '#1b1c1c',
   },
-  employeeItem: {
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e1e2e8',
+  employeeInfo: {
+    flex: 1,
   },
-  employeeName: {
-    fontSize: 18,
+  employeeNameText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  employeeRoleText: {
+    fontSize: 13,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  statusBadge: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+  },
+  statusWorking: {
+    backgroundColor: '#dcfce7',
+    borderWidth: 1,
+    borderColor: '#4ade80',
+  },
+  statusWorkingText: {
+    color: '#15803d',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  statusBreak: {
+    backgroundColor: '#ffedd5',
+    borderWidth: 1,
+    borderColor: '#fb923c',
+  },
+  statusBreakText: {
+    color: '#c2410c',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  statusOffDuty: {
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+  },
+  statusOffDutyText: {
+    color: '#64748b',
     fontWeight: '600',
-    color: '#1b1c1c',
+    fontSize: 12,
   },
-  employeeRole: {
-    fontSize: 14,
-    color: '#74777d',
-    marginTop: 4,
+  statusBadgeText: {
+    fontSize: 12,
+  },
+  emptyContainer: {
+    paddingVertical: 40,
+    alignItems: 'center',
   },
   emptyText: {
-    textAlign: 'center',
-    color: '#74777d',
-    marginTop: 32,
-    fontSize: 16,
-  }
+    color: '#94a3b8',
+    fontSize: 14,
+    fontWeight: '500',
+  },
 });
