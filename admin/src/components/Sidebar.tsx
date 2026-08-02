@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { 
@@ -34,33 +34,15 @@ const navLinks = [
 
 export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
   const pathname = usePathname();
-  const [isMobile, setIsMobile] = useState(true);
-
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 1024);
-    };
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
 
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/';
     return pathname.startsWith(href);
   };
 
-  // Inline transform to guarantee 100% off-screen on mobile when closed
-  const transformStyle = isMobile
-    ? (isOpen ? 'translateX(0)' : 'translateX(-100%)')
-    : 'none';
-
   return (
     <aside 
-      style={{ transform: transformStyle }}
-      className={`w-[260px] bg-[#1a1f2c] text-white flex flex-col h-screen fixed left-0 top-0 z-50 overflow-y-auto transition-transform duration-300 ease-in-out border-r border-slate-800/80 ${
-        isOpen ? 'shadow-2xl' : ''
-      }`}
+      className={`app-sidebar ${isOpen ? 'sidebar-open' : ''} bg-[#1a1f2c] text-white flex flex-col h-screen overflow-y-auto border-r border-slate-800/80`}
     >
       {/* Logo Header */}
       <div className="px-5 pt-6 pb-5 flex items-center justify-between gap-3 border-b border-white/5">
