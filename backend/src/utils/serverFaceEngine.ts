@@ -1,6 +1,6 @@
 import * as tf from '@tensorflow/tfjs';
 import '@tensorflow/tfjs-backend-wasm';
-import faceapi from '@vladmandic/face-api/dist/face-api.node-wasm.js';
+import * as faceapi from '@vladmandic/face-api/dist/face-api.node-wasm.js';
 import jpeg from 'jpeg-js';
 import { PNG } from 'pngjs';
 import { Logger } from '@nestjs/common';
