@@ -101,6 +101,10 @@ model AttendanceRecord {
   employee                Employee?         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   shift                   ShiftTemplate?    @relation(fields: [shiftId], references: [id])
 
+  @@index([employeeId])
+  @@index([status])
+  @@index([date])
+  @@index([employeeId, date])
   @@map("attendance_records")
 }
 
@@ -132,6 +136,8 @@ model PayrollEntry {
   createdAt          DateTime      @default(now()) @db.Timestamptz(6)
   employee           Employee?     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
+  @@index([employeeId])
+  @@index([status])
   @@map("payroll_entries")
 }
 

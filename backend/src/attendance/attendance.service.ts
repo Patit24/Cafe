@@ -25,7 +25,7 @@ export class AttendanceService {
   }
 
   async autoCompleteExpiredShifts() {
-    if (Date.now() - this.lastAutoCheck < 30000) return;
+    if (Date.now() - this.lastAutoCheck < 60000) return; // run every 60s
     this.lastAutoCheck = Date.now();
     try {
       const activeRecords = await this.prisma.attendanceRecord.findMany({
@@ -43,10 +43,18 @@ export class AttendanceService {
         const elapsedMs = now - checkInMs;
 
         let shouldComplete = elapsedMs >= requiredMs;
+
+        // Also auto-complete if shift endTime has passed by 15+ minutes
         if (shift && shift.endTime && !shouldComplete) {
           const shiftEnd = new Date(rec.checkInTime);
-          shiftEnd.setHours(shift.endTime.getUTCHours(), shift.endTime.getUTCMinutes(), 0, 0);
-          if (now >= shiftEnd.getTime() && (now - shiftEnd.getTime()) > 900000) {
+          const utcH = shift.endTime.getUTCHours();
+          const utcM = shift.endTime.getUTCMinutes();
+          shiftEnd.setHours(utcH, utcM, 0, 0);
+          // If shift end time is for the next day (e.g. night shift), add 1 day
+          if (shiftEnd.getTime() < checkInMs) {
+            shiftEnd.setDate(shiftEnd.getDate() + 1);
+          }
+          if (now >= shiftEnd.getTime() && (now - shiftEnd.getTime()) > 900000) { // 15 min buffer
             shouldComplete = true;
           }
         }
@@ -66,6 +74,7 @@ export class AttendanceService {
               netWorkingMinutes,
             },
           });
+          console.log(`[AutoEnd] Completed shift for employee ${rec.employeeId} after ${Math.round(elapsedMs / 60000)}m`);
           this.clearCache();
         }
       }
@@ -73,6 +82,7 @@ export class AttendanceService {
       console.error('Failed in autoCompleteExpiredShifts:', err);
     }
   }
+
 
   async checkIn(
     employeeId: string,
@@ -274,7 +284,7 @@ export class AttendanceService {
   }
 
   async findAll() {
-    if (this.cacheData && Date.now() - this.cacheTimestamp < 5000) {
+    if (this.cacheData && Date.now() - this.cacheTimestamp < 8000) {
       return this.cacheData;
     }
     await this.autoCompleteExpiredShifts();
