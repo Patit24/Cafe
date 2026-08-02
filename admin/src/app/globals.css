@@ -1,27 +1,59 @@
 @import "tailwindcss";
 
+/* ── Custom breakpoint: xs (480px) ── */
+@custom-media --xs (min-width: 480px);
+
 :root {
-  --background: #ffffff;
-  --foreground: #111827;
+  --background: #0f172a;
+  --foreground: #f1f5f9;
 }
 
 body {
-  background-color: #f9fafb;
-  color: #111827;
+  background-color: #0f172a;
+  color: #f1f5f9;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Form input clarity fixes */
+/* ── Scrollbar hide utility ── */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* ── xs breakpoint helper ── */
+@media (min-width: 480px) {
+  .xs\:flex { display: flex; }
+  .xs\:hidden { display: none; }
+  .xs\:block { display: block; }
+  .xs\:inline { display: inline; }
+  .xs\:inline-flex { display: inline-flex; }
+}
+
+/* ── Dark form inputs (override for dark theme pages) ── */
+.dark-form input[type="text"],
+.dark-form input[type="number"],
+.dark-form input[type="email"],
+.dark-form select,
+.dark-form textarea {
+  background-color: #1e293b !important;
+  color: #f1f5f9 !important;
+  border-color: #334155 !important;
+}
+
+/* ── Light form inputs (default for light pages like employee forms) ── */
 input[type="text"],
 input[type="number"],
 input[type="email"],
 select,
 textarea {
-  background-color: #ffffff !important;
-  color: #111827 !important;
-  border-color: #d1d5db !important;
+  background-color: #ffffff;
+  color: #111827;
+  border-color: #d1d5db;
 }
 
 input:focus,
@@ -30,3 +62,13 @@ textarea:focus {
   border-color: #9333ea !important;
   box-shadow: 0 0 0 3px rgba(147, 51, 234, 0.15) !important;
 }
+
+/* ── Smooth touch scrolling ── */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+

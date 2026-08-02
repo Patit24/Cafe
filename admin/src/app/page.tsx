@@ -6,7 +6,7 @@ import {
   Users, UserCheck, Coffee, UserX, 
   Wallet, CalendarDays, Clock,
   ChevronRight, Timer, Clock3, CalendarX2, CalendarCheck,
-  RefreshCw, Camera, Sparkles, Activity
+  RefreshCw, Camera, Sparkles, Activity, TrendingUp, Zap
 } from 'lucide-react';
 import { API_BASE_URL, fastFetch } from '@/lib/api';
 
@@ -20,7 +20,7 @@ export default function Dashboard() {
   useEffect(() => {
     setMounted(true);
     fetchDashboardData(true);
-    const interval = setInterval(() => fetchDashboardData(false), 15000); // Silent auto-refresh every 15s
+    const interval = setInterval(() => fetchDashboardData(false), 15000);
     return () => clearInterval(interval);
   }, []);
 
@@ -31,10 +31,8 @@ export default function Dashboard() {
         fastFetch(`${API_BASE_URL}/employees`),
         fastFetch(`${API_BASE_URL}/attendance`)
       ]);
-
       const empData = await empRes.json();
       const attData = await attRes.json();
-
       setEmployees(Array.isArray(empData) ? empData : []);
       setAttendances(Array.isArray(attData) ? attData : []);
       setLastRefreshed(new Date());
@@ -47,13 +45,10 @@ export default function Dashboard() {
 
   // Calculations
   const totalEmployees = employees.length;
-  
-  // Filter today's attendance records
   const todayStr = new Date().toISOString().split('T')[0];
   const todayAttendances = attendances.filter((att) => {
     if (!att.date) return false;
-    const attDate = new Date(att.date).toISOString().split('T')[0];
-    return attDate === todayStr;
+    return new Date(att.date).toISOString().split('T')[0] === todayStr;
   });
 
   const workingToday = todayAttendances.filter((a) => a.status === 'working');
@@ -62,12 +57,13 @@ export default function Dashboard() {
 
   const uniquePresentIds = new Set(
     todayAttendances
-      .filter((a) => a.status === 'working' || a.status === 'on_break' || a.status === 'completed')
-      .map((a) => a.employee?.id || a.employee?._id || a.employeeId || a.employee?.employeeCode || JSON.stringify(a.employee) || a.id)
+      .filter((a) => ['working', 'on_break', 'completed'].includes(a.status))
+      .map((a) => a.employeeId || a.employee?.id || a.id)
   );
   const presentCount = Math.min(totalEmployees > 0 ? totalEmployees : uniquePresentIds.size, uniquePresentIds.size);
   const onBreakCount = Math.min(presentCount, onBreakToday.length);
   const absentCount = Math.max(0, totalEmployees - presentCount);
+  const attendanceRate = totalEmployees > 0 ? Math.round((presentCount / totalEmployees) * 100) : 0;
 
   const formatTime = (dateStr: string | null) => {
     if (!dateStr) return '--:--';
@@ -77,266 +73,274 @@ export default function Dashboard() {
   const getWorkDuration = (checkInStr: string | null, checkOutStr?: string | null) => {
     if (!checkInStr) return '--';
     const start = new Date(checkInStr).getTime();
-    const end = checkOutStr ? new Date(checkOutStr).getTime() : new Date().getTime();
+    const end = checkOutStr ? new Date(checkOutStr).getTime() : Date.now();
     const diffMs = Math.max(0, end - start);
     const hours = Math.floor(diffMs / 3600000);
     const mins = Math.floor((diffMs % 3600000) / 60000);
     return `${hours}h ${mins}m`;
   };
 
+  const statCards = [
+    {
+      label: 'Total Staff',
+      value: totalEmployees,
+      sub: 'Registered profiles',
+      icon: <Users className="w-5 h-5 sm:w-6 sm:h-6" />,
+      iconBg: 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400',
+      accent: 'from-emerald-500 to-teal-500',
+      href: '/employees',
+      badge: null,
+    },
+    {
+      label: 'Present Today',
+      value: presentCount,
+      sub: 'Working & checked out',
+      icon: <UserCheck className="w-5 h-5 sm:w-6 sm:h-6" />,
+      iconBg: 'bg-blue-500/15 border-blue-500/30 text-blue-400',
+      accent: 'from-blue-500 to-indigo-500',
+      href: '/attendance',
+      badge: `${attendanceRate}%`,
+    },
+    {
+      label: 'On Break',
+      value: onBreakCount,
+      sub: 'Currently on break',
+      icon: <Coffee className="w-5 h-5 sm:w-6 sm:h-6" />,
+      iconBg: 'bg-amber-500/15 border-amber-500/30 text-amber-400',
+      accent: 'from-amber-500 to-orange-500',
+      href: null,
+      badge: null,
+    },
+    {
+      label: 'Absent Today',
+      value: absentCount,
+      sub: 'Not checked in yet',
+      icon: <UserX className="w-5 h-5 sm:w-6 sm:h-6" />,
+      iconBg: 'bg-rose-500/15 border-rose-500/30 text-rose-400',
+      accent: 'from-rose-500 to-red-600',
+      href: null,
+      badge: null,
+    },
+  ];
+
   return (
-    <div className="p-3.5 sm:p-6 lg:p-8 pb-14 bg-slate-900 text-slate-100 min-h-screen">
-      {/* Header */}
-      <header className="flex flex-col xl:flex-row justify-between items-start xl:items-center mb-6 sm:mb-8 gap-4 pb-4 border-b border-slate-800/70">
-        <div>
-          <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-white tracking-tight flex items-center gap-2">
-            Executive Overview <span className="text-xl sm:text-2xl">👋</span>
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-400 mt-1 flex items-center gap-2 flex-wrap font-medium">
-            <span>Live Kitchen Staff Attendance</span>
-            <span className="text-slate-600 hidden sm:inline">•</span>
-            <span className="text-emerald-400 inline-flex items-center gap-1 font-semibold">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              Real-time AI verification active
+    <div className="p-3 sm:p-5 lg:p-8 pb-16 bg-slate-900 text-slate-100 min-h-screen">
+
+      {/* ── Page Header ── */}
+      <header className="mb-5 sm:mb-7">
+        {/* Title row */}
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div>
+            <h1 className="text-lg sm:text-2xl lg:text-3xl font-extrabold text-white tracking-tight flex items-center gap-2">
+              Overview <span className="text-lg sm:text-2xl">👋</span>
+            </h1>
+            <p className="text-[11px] sm:text-sm text-slate-400 mt-1 flex items-center gap-1.5 font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block"></span>
+              <span className="text-emerald-400 font-semibold">Live</span>
+              <span className="text-slate-600">•</span>
+              <span>Kitchen Staff Attendance</span>
+            </p>
+          </div>
+
+          {/* Refresh button — always visible, top right */}
+          <button
+            onClick={() => fetchDashboardData(true)}
+            className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs font-semibold text-slate-300 hover:bg-slate-700 transition-all shrink-0"
+          >
+            <RefreshCw size={13} className={loading ? 'animate-spin text-blue-400' : 'text-slate-400'} />
+            <span className="hidden sm:inline">
+              {mounted ? `Updated ${lastRefreshed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Refresh'}
             </span>
-          </p>
+            <span className="sm:hidden">Sync</span>
+          </button>
         </div>
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full xl:w-auto">
+
+        {/* Action buttons row — scrollable on mobile */}
+        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide -mx-3 px-3 sm:mx-0 sm:px-0 sm:flex-wrap">
           <a
             href="https://evening-light-attendance.vercel.app"
             target="_blank"
             rel="noopener noreferrer"
-            className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white px-4 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold shadow-md hover:shadow-lg hover:brightness-110 transition-all flex items-center justify-center gap-2 w-full sm:w-auto shrink-0"
+            className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white px-4 py-2 rounded-xl text-[11px] sm:text-xs font-bold shadow-md hover:brightness-110 transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0"
           >
-            📱 Launch Face Verification App ↗
+            <Camera size={13} />
+            Face Verify App ↗
           </a>
-          <button 
-            onClick={() => fetchDashboardData(true)}
-            className="flex items-center justify-center gap-2 px-3.5 py-2.5 bg-slate-800/90 border border-slate-700/80 rounded-xl text-xs sm:text-sm font-semibold text-slate-200 shadow-sm hover:bg-slate-700 transition-all flex-1 sm:flex-initial shrink-0 whitespace-nowrap"
+          <Link
+            href="/employees/new"
+            className="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-xl text-[11px] sm:text-xs font-bold shadow-md transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0"
           >
-            <RefreshCw size={15} className={`text-slate-400 ${loading ? 'animate-spin text-blue-400' : ''}`} />
-            <span>Refresh{mounted ? ` (${lastRefreshed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})` : ''}</span>
-          </button>
-          <Link 
-            href="/employees/new" 
-            className="bg-purple-600 text-white px-4 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold shadow-md hover:bg-purple-500 transition-all flex items-center justify-center gap-1.5 flex-1 sm:flex-initial shrink-0 whitespace-nowrap"
-          >
-            <Users size={16} />
-            <span>+ Add Employee</span>
+            <Users size={13} />
+            + Add Employee
           </Link>
-          <Link 
-            href="/payroll" 
-            className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white px-4 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold shadow-md hover:brightness-110 transition-all flex items-center justify-center gap-1.5 flex-1 sm:flex-initial shrink-0 whitespace-nowrap"
+          <Link
+            href="/payroll"
+            className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:brightness-110 text-white px-4 py-2 rounded-xl text-[11px] sm:text-xs font-bold shadow-md transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0"
           >
-            <Wallet size={16} />
-            <span>Payroll</span>
+            <Wallet size={13} />
+            Payroll
+          </Link>
+          <Link
+            href="/reports"
+            className="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-xl text-[11px] sm:text-xs font-bold shadow-md transition-all flex items-center gap-1.5 whitespace-nowrap shrink-0 border border-slate-600"
+          >
+            <TrendingUp size={13} />
+            Reports
           </Link>
         </div>
       </header>
 
-      {/* Top Stats Cards */}
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8">
-        {/* Total Employees */}
-        <Link href="/employees" className="bg-slate-800/80 backdrop-blur-md p-4 sm:p-6 rounded-2xl border border-slate-700/70 shadow-lg relative overflow-hidden group hover:border-slate-600 hover:shadow-xl transition-all flex flex-col justify-between">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 justify-between">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0 group-hover:scale-105 transition-transform shadow-inner">
-              <Users className="w-5 h-5 sm:w-6 sm:h-6" />
-            </div>
-            <ChevronRight className="w-5 h-5 text-slate-500 hidden sm:block group-hover:translate-x-1 transition-transform" />
-          </div>
-          <div className="mt-3 sm:mt-4">
-            <p className="text-[10px] sm:text-xs text-slate-400 font-bold uppercase tracking-wider">Total Employees</p>
-            <h3 className="text-2xl sm:text-3xl font-extrabold text-white mt-0.5">{totalEmployees}</h3>
-          </div>
-          <div className="mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-slate-700/50 flex items-center justify-between">
-            <p className="text-[11px] sm:text-xs text-slate-400 truncate">Registered staff profiles</p>
-          </div>
-          <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-teal-500"></div>
-        </Link>
-
-        {/* Present Today */}
-        <div className="bg-slate-800/80 backdrop-blur-md p-4 sm:p-6 rounded-2xl border border-slate-700/70 shadow-lg relative overflow-hidden flex flex-col justify-between">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 justify-between">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0 shadow-inner">
-              <UserCheck className="w-5 h-5 sm:w-6 sm:h-6" />
-            </div>
-            <span className="px-2 py-0.5 bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10px] font-extrabold rounded-full hidden sm:inline-block">
-              {totalEmployees > 0 ? Math.min(100, Math.round((presentCount / totalEmployees) * 100)) : 0}% Active
-            </span>
-          </div>
-          <div className="mt-3 sm:mt-4">
-            <p className="text-[10px] sm:text-xs text-slate-400 font-bold uppercase tracking-wider">Present Today</p>
-            <h3 className="text-2xl sm:text-3xl font-extrabold text-white mt-0.5">{presentCount}</h3>
-          </div>
-          <div className="mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-slate-700/50 flex items-center justify-between">
-            <p className="text-[11px] sm:text-xs text-slate-400 truncate">Working & checked out</p>
-          </div>
-          <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-indigo-500"></div>
-        </div>
-
-        {/* On Break */}
-        <div className="bg-slate-800/80 backdrop-blur-md p-4 sm:p-6 rounded-2xl border border-slate-700/70 shadow-lg relative overflow-hidden flex flex-col justify-between">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 justify-between">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0 shadow-inner">
-              <Coffee className="w-5 h-5 sm:w-6 sm:h-6" />
-            </div>
-          </div>
-          <div className="mt-3 sm:mt-4">
-            <p className="text-[10px] sm:text-xs text-slate-400 font-bold uppercase tracking-wider">On Break</p>
-            <h3 className="text-2xl sm:text-3xl font-extrabold text-white mt-0.5">{onBreakCount}</h3>
-          </div>
-          <div className="mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-slate-700/50 flex items-center justify-between">
-            <p className="text-[11px] sm:text-xs text-slate-400 truncate">Currently on shift break</p>
-          </div>
-          <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500 to-orange-500"></div>
-        </div>
-
-        {/* Absent */}
-        <div className="bg-slate-800/80 backdrop-blur-md p-4 sm:p-6 rounded-2xl border border-slate-700/70 shadow-lg relative overflow-hidden flex flex-col justify-between">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 justify-between">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0 shadow-inner">
-              <UserX className="w-5 h-5 sm:w-6 sm:h-6" />
-            </div>
-          </div>
-          <div className="mt-3 sm:mt-4">
-            <p className="text-[10px] sm:text-xs text-slate-400 font-bold uppercase tracking-wider">Absent Today</p>
-            <h3 className="text-2xl sm:text-3xl font-extrabold text-white mt-0.5">{absentCount}</h3>
-          </div>
-          <div className="mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-slate-700/50 flex items-center justify-between">
-            <p className="text-[11px] sm:text-xs text-slate-400 truncate">Not checked in yet</p>
-          </div>
-          <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-rose-500 to-red-600"></div>
-        </div>
+      {/* ── Stat Cards ── */}
+      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-5 sm:mb-7">
+        {statCards.map((card, i) => {
+          const CardWrapper = card.href ? Link : 'div';
+          return (
+            <CardWrapper
+              key={i}
+              href={card.href as string}
+              className="bg-slate-800/80 border border-slate-700/70 rounded-2xl p-3.5 sm:p-5 relative overflow-hidden group hover:border-slate-600 hover:shadow-xl transition-all flex flex-col justify-between shadow-md cursor-pointer"
+            >
+              {/* Icon + badge */}
+              <div className="flex items-start justify-between mb-3">
+                <div className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform shadow-inner ${card.iconBg}`}>
+                  {card.icon}
+                </div>
+                {card.badge && (
+                  <span className="text-[10px] font-extrabold bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded-full">
+                    {card.badge}
+                  </span>
+                )}
+              </div>
+              {/* Value */}
+              <div>
+                <p className="text-[10px] sm:text-[11px] text-slate-400 font-bold uppercase tracking-wider">{card.label}</p>
+                <h3 className="text-2xl sm:text-3xl font-extrabold text-white mt-0.5 leading-none">{card.value}</h3>
+                <p className="text-[10px] sm:text-xs text-slate-500 mt-1.5 truncate">{card.sub}</p>
+              </div>
+              {/* Bottom accent bar */}
+              <div className={`absolute bottom-0 left-0 w-full h-0.5 bg-gradient-to-r ${card.accent}`}></div>
+            </CardWrapper>
+          );
+        })}
       </section>
 
-      {/* Quick Access Shortcuts */}
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-6 mb-6 sm:mb-8">
-        <Link href="/employees" className="bg-slate-800/70 p-4 sm:p-5 rounded-2xl border border-slate-700/60 shadow-md flex items-center justify-between group hover:bg-slate-800 hover:border-slate-600 transition-all">
-          <div className="flex items-center gap-3.5 min-w-0">
-            <div className="w-11 h-11 rounded-xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400 shrink-0 shadow-inner">
-              <Users size={22} />
+      {/* ── Quick Access Shortcuts ── */}
+      <section className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-5 sm:mb-7">
+        {[
+          { href: '/employees', icon: <Users size={20} />, iconBg: 'bg-purple-500/15 border-purple-500/30 text-purple-400', title: 'Manage Employees', sub: 'Add staff & 4-angle face auth' },
+          { href: '/attendance', icon: <Clock size={20} />, iconBg: 'bg-blue-500/15 border-blue-500/30 text-blue-400', title: 'Attendance Log', sub: 'Audit scores, GPS & shifts' },
+          { href: '/payroll', icon: <Wallet size={20} />, iconBg: 'bg-teal-500/15 border-teal-500/30 text-teal-400', title: 'Payroll Calculation', sub: 'Auto deductions & overtime' },
+        ].map((item, i) => (
+          <Link
+            key={i}
+            href={item.href}
+            className="bg-slate-800/70 border border-slate-700/60 rounded-2xl p-4 flex items-center justify-between group hover:bg-slate-800 hover:border-slate-600 transition-all shadow-sm"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <div className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 shadow-inner ${item.iconBg}`}>
+                {item.icon}
+              </div>
+              <div className="min-w-0">
+                <h3 className="font-bold text-white text-sm sm:text-[13px] lg:text-sm truncate">{item.title}</h3>
+                <p className="text-[11px] text-slate-400 mt-0.5 truncate">{item.sub}</p>
+              </div>
             </div>
-            <div className="min-w-0">
-              <h3 className="font-bold text-white text-sm sm:text-base truncate">Manage Employees</h3>
-              <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5 truncate">Add staff & 4-angle face auth</p>
+            <div className="w-8 h-8 rounded-xl bg-slate-700/50 flex items-center justify-center text-slate-400 group-hover:bg-slate-700 group-hover:text-white transition-colors shrink-0 ml-2">
+              <ChevronRight size={16} />
             </div>
-          </div>
-          <div className="w-8 h-8 rounded-xl bg-slate-700/50 flex items-center justify-center text-slate-400 group-hover:bg-slate-700 group-hover:text-white transition-colors shrink-0">
-            <ChevronRight size={18} />
-          </div>
-        </Link>
-        <Link href="/attendance" className="bg-slate-800/70 p-4 sm:p-5 rounded-2xl border border-slate-700/60 shadow-md flex items-center justify-between group hover:bg-slate-800 hover:border-slate-600 transition-all">
-          <div className="flex items-center gap-3.5 min-w-0">
-            <div className="w-11 h-11 rounded-xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0 shadow-inner">
-              <Clock size={22} />
-            </div>
-            <div className="min-w-0">
-              <h3 className="font-bold text-white text-sm sm:text-base truncate">Attendance Log</h3>
-              <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5 truncate">Audit face scores, GPS & shifts</p>
-            </div>
-          </div>
-          <div className="w-8 h-8 rounded-xl bg-slate-700/50 flex items-center justify-center text-slate-400 group-hover:bg-slate-700 group-hover:text-white transition-colors shrink-0">
-            <ChevronRight size={18} />
-          </div>
-        </Link>
-        <Link href="/payroll" className="bg-slate-800/70 p-4 sm:p-5 rounded-2xl border border-slate-700/60 shadow-md flex items-center justify-between group hover:bg-slate-800 hover:border-slate-600 transition-all">
-          <div className="flex items-center gap-3.5 min-w-0">
-            <div className="w-11 h-11 rounded-xl bg-teal-500/15 border border-teal-500/30 flex items-center justify-center text-teal-400 shrink-0 shadow-inner">
-              <Wallet size={22} />
-            </div>
-            <div className="min-w-0">
-              <h3 className="font-bold text-white text-sm sm:text-base truncate">Payroll Calculation</h3>
-              <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5 truncate">Auto deductions & overtime payouts</p>
-            </div>
-          </div>
-          <div className="w-8 h-8 rounded-xl bg-slate-700/50 flex items-center justify-center text-slate-400 group-hover:bg-slate-700 group-hover:text-white transition-colors shrink-0">
-            <ChevronRight size={18} />
-          </div>
-        </Link>
+          </Link>
+        ))}
       </section>
 
-      {/* Live Active Staff Table & Mobile Cards */}
-      <section className="bg-slate-800/80 backdrop-blur-md rounded-2xl border border-slate-700/70 shadow-xl overflow-hidden mb-8">
-        <div className="p-4 sm:p-6 border-b border-slate-700/70 flex flex-col sm:flex-row justify-between sm:items-center gap-3 bg-slate-800/50">
-          <div className="flex items-center gap-3 flex-wrap">
-            <h2 className="text-base sm:text-lg font-bold text-white tracking-wide">Active Staff (Kitchen)</h2>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-500/15 text-emerald-400 text-xs font-extrabold rounded-full border border-emerald-500/30">
+      {/* ── Live Active Staff ── */}
+      <section className="bg-slate-800/80 border border-slate-700/70 rounded-2xl overflow-hidden mb-5 sm:mb-7 shadow-xl">
+        {/* Section header */}
+        <div className="px-4 sm:px-6 py-4 border-b border-slate-700/70 flex items-center justify-between gap-3 bg-slate-800/50">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h2 className="text-sm sm:text-base font-bold text-white tracking-wide">Active Staff (Kitchen)</h2>
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-500/15 text-emerald-400 text-[10px] font-extrabold rounded-full border border-emerald-500/30">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
               Live ({todayAttendances.length})
             </span>
           </div>
-          <Link href="/attendance" className="text-xs sm:text-sm font-semibold text-blue-400 hover:text-blue-300 flex items-center gap-1 bg-blue-500/10 hover:bg-blue-500/20 px-3.5 py-2 rounded-xl border border-blue-500/20 transition-all w-fit">
-            <span>View Full Log</span> <ChevronRight size={16} />
+          <Link
+            href="/attendance"
+            className="text-xs font-semibold text-blue-400 hover:text-blue-300 flex items-center gap-0.5 bg-blue-500/10 hover:bg-blue-500/20 px-3 py-1.5 rounded-xl border border-blue-500/20 transition-all whitespace-nowrap shrink-0"
+          >
+            Full Log <ChevronRight size={14} />
           </Link>
         </div>
 
-        {/* Desktop Table View */}
+        {/* Desktop Table */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="bg-slate-900/80 text-slate-400 text-[11px] font-extrabold uppercase tracking-wider border-b border-slate-700/70">
               <tr>
                 <th className="px-6 py-4">Employee</th>
                 <th className="px-6 py-4">Check-In</th>
-                <th className="px-6 py-4">Face Verification</th>
+                <th className="px-6 py-4">Face Score</th>
                 <th className="px-6 py-4">Liveness</th>
                 <th className="px-6 py-4">Status</th>
-                <th className="px-6 py-4">Work Duration</th>
+                <th className="px-6 py-4">Duration</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-700/60">
               {todayAttendances.length === 0 ? (
-                <tr className="bg-slate-800/40">
-                  <td colSpan={6} className="px-6 py-12 text-center text-slate-400">
-                    <p className="text-base font-semibold text-slate-200">No active staff checked in today yet.</p>
-                    <p className="text-xs text-slate-500 mt-1">Staff can check in on their mobile phone using face verification.</p>
+                <tr>
+                  <td colSpan={6} className="px-6 py-14 text-center">
+                    <div className="flex flex-col items-center gap-2">
+                      <span className="text-3xl">🕐</span>
+                      <p className="text-sm font-semibold text-slate-300">No staff checked in today yet.</p>
+                      <p className="text-xs text-slate-500">Staff check in via face verification on the mobile app.</p>
+                    </div>
                   </td>
                 </tr>
               ) : (
                 todayAttendances.map((rec) => (
-                  <tr key={rec.id} className="hover:bg-slate-750 transition-colors">
+                  <tr key={rec.id} className="hover:bg-slate-800/60 transition-colors group">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 text-white font-black flex items-center justify-center text-sm shadow-md shrink-0 border border-white/10">
-                          {(rec.employee?.name || 'Staff').substring(0, 2).toUpperCase()}
+                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 text-white font-black flex items-center justify-center text-sm shadow-md shrink-0">
+                          {(rec.employee?.name || 'ST').substring(0, 2).toUpperCase()}
                         </div>
                         <div>
-                          <p className="font-bold text-white">{rec.employee?.name || 'Kitchen Staff'}</p>
-                          <p className="text-xs text-slate-400 font-mono mt-0.5">{rec.employee?.employeeCode || 'EMP-001'}</p>
+                          <p className="font-bold text-white text-[13px] group-hover:text-indigo-300 transition-colors">{rec.employee?.name || 'Kitchen Staff'}</p>
+                          <p className="text-[11px] text-slate-400 font-mono">{rec.employee?.employeeCode || '—'}</p>
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 font-bold text-slate-200 font-mono">
+                    <td className="px-6 py-4 font-bold text-slate-200 font-mono text-sm">
                       {formatTime(rec.checkInTime)}
                     </td>
                     <td className="px-6 py-4">
                       {rec.faceMatchScore ? (
-                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                          <Camera size={13} className="text-emerald-400" />
-                          {Number(rec.faceMatchScore).toFixed(1)}% Match
-                        </span>
-                      ) : (
-                        <span className="text-slate-500">—</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      {rec.livenessPassed === true ? (
-                        <span className="text-emerald-400 font-bold text-xs inline-flex items-center gap-1">
-                          ✓ Passed
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                          <Camera size={11} />
+                          {Number(rec.faceMatchScore).toFixed(1)}%
                         </span>
                       ) : (
                         <span className="text-slate-500 text-xs">—</span>
                       )}
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`px-3 py-1 text-xs font-extrabold rounded-full tracking-wide uppercase ${
-                        rec.status === 'working' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
-                        rec.status === 'on_break' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
-                        'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                      {rec.livenessPassed === true ? (
+                        <span className="text-emerald-400 font-bold text-xs">✓ Passed</span>
+                      ) : (
+                        <span className="text-slate-500 text-xs">—</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`px-2.5 py-1 text-[10px] font-extrabold rounded-full uppercase tracking-wide ${
+                        rec.status === 'working'
+                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                          : rec.status === 'on_break'
+                          ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                          : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
                       }`}>
                         {(rec.status || 'working').replace('_', ' ')}
                       </span>
                     </td>
-                    <td className="px-6 py-4 font-bold text-emerald-400 font-mono text-base">
+                    <td className="px-6 py-4 font-bold text-emerald-400 font-mono text-sm">
                       {getWorkDuration(rec.checkInTime, rec.checkOutTime)}
                     </td>
                   </tr>
@@ -346,112 +350,88 @@ export default function Dashboard() {
           </table>
         </div>
 
-        {/* Mobile Card List View (For small screens & phones) */}
-        <div className="md:hidden divide-y divide-slate-700/60">
+        {/* Mobile Cards */}
+        <div className="md:hidden">
           {todayAttendances.length === 0 ? (
-            <div className="p-8 text-center text-slate-400">
-              <p className="text-sm font-semibold text-slate-200">No active staff checked in today yet.</p>
-              <p className="text-xs text-slate-500 mt-1">Staff can check in instantly on their mobile phone.</p>
+            <div className="p-8 text-center">
+              <p className="text-2xl mb-2">🕐</p>
+              <p className="text-sm font-semibold text-slate-300">No staff checked in today yet.</p>
+              <p className="text-xs text-slate-500 mt-1">Staff use the face verification mobile app to check in.</p>
             </div>
           ) : (
-            todayAttendances.map((rec) => (
-              <div key={rec.id} className="p-4 bg-slate-800/30 hover:bg-slate-800/60 transition-all space-y-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 text-white font-black flex items-center justify-center text-sm shadow-md shrink-0 border border-white/10">
-                      {(rec.employee?.name || 'Staff').substring(0, 2).toUpperCase()}
+            <div className="divide-y divide-slate-700/50">
+              {todayAttendances.map((rec) => (
+                <div key={rec.id} className="p-3.5 space-y-3">
+                  {/* Name + Status */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 text-white font-black flex items-center justify-center text-xs shadow-md shrink-0">
+                        {(rec.employee?.name || 'ST').substring(0, 2).toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-bold text-white text-sm truncate">{rec.employee?.name || 'Kitchen Staff'}</p>
+                        <p className="text-[10px] text-slate-400 font-mono truncate">{rec.employee?.employeeCode || '—'}</p>
+                      </div>
                     </div>
-                    <div className="min-w-0 truncate">
-                      <p className="font-bold text-white text-sm truncate">{rec.employee?.name || 'Kitchen Staff'}</p>
-                      <p className="text-xs text-slate-400 font-mono mt-0.5 truncate">{rec.employee?.employeeCode || 'EMP-001'}</p>
+                    <span className={`px-2.5 py-1 text-[10px] font-extrabold rounded-full uppercase tracking-wide shrink-0 ${
+                      rec.status === 'working'
+                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                        : rec.status === 'on_break'
+                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                        : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                    }`}>
+                      {(rec.status || 'working').replace('_', ' ')}
+                    </span>
+                  </div>
+
+                  {/* Stats row */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="bg-slate-900/70 rounded-xl p-2.5 text-center border border-slate-700/50">
+                      <p className="text-[9px] text-slate-400 uppercase font-bold tracking-wide">Check-in</p>
+                      <p className="text-slate-100 font-bold font-mono text-xs mt-0.5">{formatTime(rec.checkInTime)}</p>
+                    </div>
+                    <div className="bg-slate-900/70 rounded-xl p-2.5 text-center border border-slate-700/50">
+                      <p className="text-[9px] text-slate-400 uppercase font-bold tracking-wide">Duration</p>
+                      <p className="text-emerald-400 font-bold font-mono text-xs mt-0.5">{getWorkDuration(rec.checkInTime, rec.checkOutTime)}</p>
+                    </div>
+                    <div className="bg-slate-900/70 rounded-xl p-2.5 text-center border border-slate-700/50">
+                      <p className="text-[9px] text-slate-400 uppercase font-bold tracking-wide">Face</p>
+                      <p className="text-emerald-400 font-bold text-xs mt-0.5">
+                        {rec.faceMatchScore ? `${Number(rec.faceMatchScore).toFixed(0)}%` : '—'}
+                      </p>
                     </div>
                   </div>
-                  <span className={`px-2.5 py-1 text-[10px] font-extrabold rounded-full shrink-0 uppercase tracking-wide ${
-                    rec.status === 'working' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
-                    rec.status === 'on_break' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
-                    'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                  }`}>
-                    {(rec.status || 'working').replace('_', ' ')}
-                  </span>
                 </div>
-                <div className="grid grid-cols-2 gap-2 bg-slate-900/70 p-2.5 rounded-xl border border-slate-700/50 text-xs">
-                  <div>
-                    <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Check-In</span>
-                    <span className="text-slate-200 font-bold font-mono text-sm mt-0.5 block">{formatTime(rec.checkInTime)}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Duration</span>
-                    <span className="text-emerald-400 font-bold font-mono text-sm mt-0.5 block">{getWorkDuration(rec.checkInTime, rec.checkOutTime)}</span>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between pt-1 text-xs">
-                  <div className="flex items-center gap-1.5 text-slate-300 font-medium text-[11px]">
-                    <Camera size={13} className="text-emerald-400 shrink-0" />
-                    <span>Match: <strong className="text-white font-mono">{rec.faceMatchScore ? `${Number(rec.faceMatchScore).toFixed(1)}%` : '—'}</strong></span>
-                  </div>
-                  <div>
-                    {rec.livenessPassed === true ? (
-                      <span className="text-emerald-400 font-bold text-[11px] inline-flex items-center gap-1">✓ Liveness Passed</span>
-                    ) : (
-                      <span className="text-slate-500 text-[11px]">—</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))
+              ))}
+            </div>
           )}
         </div>
       </section>
 
-      {/* Bottom Summary Indicators */}
+      {/* ── Bottom Summary ── */}
       <section className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
-        <div className="bg-slate-800/80 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-slate-700/70 shadow-md flex items-center sm:items-start gap-3.5">
-          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0 shadow-inner">
-            <Timer className="w-5 h-5 sm:w-6 sm:h-6" />
+        {[
+          { icon: <Timer className="w-5 h-5" />, iconBg: 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400', label: 'Working Now', value: workingToday.length, sub: 'Active shifts' },
+          { icon: <Clock3 className="w-5 h-5" />, iconBg: 'bg-blue-500/15 border-blue-500/30 text-blue-400', label: 'Completed', value: completedToday.length, sub: 'Checked out today' },
+          { icon: <CalendarCheck className="w-5 h-5" />, iconBg: 'bg-purple-500/15 border-purple-500/30 text-purple-400', label: 'Registered', value: totalEmployees, sub: 'Staff in system' },
+          { icon: <Sparkles className="w-5 h-5" />, iconBg: 'bg-teal-500/15 border-teal-500/30 text-teal-400', label: 'AI Shield', value: null, sub: 'Anti-spoofing active', special: 'Active 🛡️' },
+        ].map((item, i) => (
+          <div key={i} className="bg-slate-800/80 border border-slate-700/70 rounded-2xl p-3.5 sm:p-4 flex items-center gap-3 shadow-md">
+            <div className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 shadow-inner ${item.iconBg}`}>
+              {item.icon}
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider truncate">{item.label}</p>
+              {item.special ? (
+                <h4 className="text-base sm:text-lg font-extrabold text-emerald-400 mt-0.5 leading-none">{item.special}</h4>
+              ) : (
+                <h4 className="text-xl sm:text-2xl font-extrabold text-white mt-0.5 leading-none">{item.value}</h4>
+              )}
+              <p className="text-[10px] text-slate-500 mt-1 truncate">{item.sub}</p>
+            </div>
           </div>
-          <div className="min-w-0">
-            <p className="text-[11px] sm:text-xs text-slate-400 font-semibold uppercase tracking-wider truncate">Checked-in</p>
-            <h4 className="text-xl sm:text-2xl font-extrabold text-white mt-0.5">{workingToday.length}</h4>
-            <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5 hidden sm:block">Currently working</p>
-          </div>
-        </div>
-
-        <div className="bg-slate-800/80 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-slate-700/70 shadow-md flex items-center sm:items-start gap-3.5">
-          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0 shadow-inner">
-            <Clock3 className="w-5 h-5 sm:w-6 sm:h-6" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-[11px] sm:text-xs text-slate-400 font-semibold uppercase tracking-wider truncate">Completed</p>
-            <h4 className="text-xl sm:text-2xl font-extrabold text-white mt-0.5">{completedToday.length}</h4>
-            <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5 hidden sm:block">Checked out today</p>
-          </div>
-        </div>
-
-        <div className="bg-slate-800/80 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-slate-700/70 shadow-md flex items-center sm:items-start gap-3.5">
-          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400 shrink-0 shadow-inner">
-            <CalendarCheck className="w-5 h-5 sm:w-6 sm:h-6" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-[11px] sm:text-xs text-slate-400 font-semibold uppercase tracking-wider truncate">Registered</p>
-            <h4 className="text-xl sm:text-2xl font-extrabold text-white mt-0.5">{totalEmployees}</h4>
-            <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5 hidden sm:block">Staff in system</p>
-          </div>
-        </div>
-
-        <div className="bg-slate-800/80 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-slate-700/70 shadow-md flex items-center sm:items-start gap-3.5">
-          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-teal-500/15 border border-teal-500/30 flex items-center justify-center text-teal-400 shrink-0 shadow-inner">
-            <Sparkles className="w-5 h-5 sm:w-6 sm:h-6" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-[11px] sm:text-xs text-slate-400 font-semibold uppercase tracking-wider truncate">AI Shield</p>
-            <h4 className="text-lg sm:text-xl font-extrabold text-emerald-400 mt-0.5 flex items-center gap-1">
-              <span>Active</span> <span className="text-xs">🛡️</span>
-            </h4>
-            <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5 hidden sm:block">Anti-spoofing ready</p>
-          </div>
-        </div>
+        ))}
       </section>
     </div>
   );
 }
-
