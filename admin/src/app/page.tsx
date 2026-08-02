@@ -14,11 +14,14 @@ export default function Dashboard() {
   const [employees, setEmployees] = useState<any[]>([]);
   const [attendances, setAttendances] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
+  const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [todayStr, setTodayStr] = useState('');
 
   useEffect(() => {
     setMounted(true);
+    setTodayStr(new Date().toISOString().split('T')[0]);
+    setLastRefreshed(new Date());
     fetchDashboardData(true);
     const interval = setInterval(() => fetchDashboardData(false), 15000);
     return () => clearInterval(interval);
@@ -45,11 +48,10 @@ export default function Dashboard() {
 
   // Calculations
   const totalEmployees = employees.length;
-  const todayStr = new Date().toISOString().split('T')[0];
-  const todayAttendances = attendances.filter((att) => {
+  const todayAttendances = mounted && todayStr ? attendances.filter((att) => {
     if (!att.date) return false;
     return new Date(att.date).toISOString().split('T')[0] === todayStr;
-  });
+  }) : [];
 
   const workingToday = todayAttendances.filter((a) => a.status === 'working');
   const onBreakToday = todayAttendances.filter((a) => a.status === 'on_break');
@@ -149,7 +151,7 @@ export default function Dashboard() {
           >
             <RefreshCw size={13} className={loading ? 'animate-spin text-blue-400' : 'text-slate-400'} />
             <span className="hidden sm:inline">
-              {mounted ? `Updated ${lastRefreshed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Refresh'}
+              {mounted && lastRefreshed ? `Updated ${lastRefreshed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Refresh'}
             </span>
             <span className="sm:hidden">Sync</span>
           </button>
