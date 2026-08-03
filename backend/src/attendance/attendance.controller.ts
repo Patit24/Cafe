@@ -39,9 +39,9 @@ export class AttendanceController {
 
   @Post('verify-face')
   verifyFace(
-    @Body() body: { employeeId: string; livePhotoBase64: string },
+    @Body() body: { employeeId: string; livePhotoBase64?: string; liveVector?: number[] },
   ) {
-    return this.attendanceService.verifyFace(body.employeeId, body.livePhotoBase64);
+    return this.attendanceService.verifyFace(body.employeeId, body.livePhotoBase64, body.liveVector);
   }
 
   @Get()

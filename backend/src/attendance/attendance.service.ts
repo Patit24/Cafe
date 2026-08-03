@@ -333,9 +333,12 @@ export class AttendanceService {
     });
   }
 
-  async verifyFace(employeeId: string, livePhotoBase64: string) {
-    if (!employeeId || !livePhotoBase64) {
-      throw new BadRequestException('Employee ID and live capture photo are required');
+  async verifyFace(employeeId: string, livePhotoBase64?: string, liveVectorInput?: number[]) {
+    if (!employeeId) {
+      throw new BadRequestException('Employee ID is required');
+    }
+    if (!livePhotoBase64 && (!liveVectorInput || !Array.isArray(liveVectorInput))) {
+      throw new BadRequestException('Either livePhotoBase64 or liveVector array is required');
     }
 
     const employeeFaces = await this.prisma.employeeFace.findMany({
@@ -370,14 +373,19 @@ export class AttendanceService {
       };
     }
 
-    // Extract 128D vector from live captured camera image
-    const liveVector = await extractFaceVectorFromBase64(livePhotoBase64);
+    let liveVector: number[] | null = null;
+    if (Array.isArray(liveVectorInput) && liveVectorInput.length === 128) {
+      liveVector = liveVectorInput;
+    } else if (livePhotoBase64) {
+      liveVector = await extractFaceVectorFromBase64(livePhotoBase64);
+    }
+
     if (!liveVector) {
       return {
         success: false,
         reason: 'no_face',
         score: 0,
-        bestAngle: 'No clean face detected in live photo',
+        bestAngle: 'No clean face detected in live submission',
       };
     }
 
