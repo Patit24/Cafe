@@ -153,6 +153,9 @@ export default function CameraScreen() {
     if (Platform.OS !== 'web') {
       // On Android APK / Native mobile, perform secure Server-Side Neural Face Verification
       try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8-second strict timeout
+
         const res = await fetch(`${API_BASE_URL}/attendance/verify-face`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -160,7 +163,9 @@ export default function CameraScreen() {
             employeeId: employeeId || employee?.id,
             livePhotoBase64: liveScreenshot,
           }),
+          signal: controller.signal,
         });
+        clearTimeout(timeoutId);
         const data = await res.json();
 
         if (!res.ok || data?.reason === 'no_registered_faces' || data?.reason === 'old_embeddings') {
@@ -187,10 +192,10 @@ export default function CameraScreen() {
         setFailReason('none');
         setStatus('success');
         return;
-      } catch (error) {
-        console.error('Server biometric verification failed:', error);
+      } catch (error: any) {
+        console.error('Server biometric verification failed or timed out:', error);
         setMatchScore(0);
-        setBestAngle('Server Connection Error');
+        setBestAngle(error?.name === 'AbortError' ? 'Verification Timed Out (8s)' : 'Server Connection Error');
         setStatus('failed');
         setFailReason('mismatch');
         return;

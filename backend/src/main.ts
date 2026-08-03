@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { json, urlencoded } from 'express';
+import { initServerFaceEngine } from './utils/serverFaceEngine';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -26,5 +27,10 @@ async function bootstrap() {
 
   const port = process.env.PORT || 3001;
   await app.listen(port, '0.0.0.0');
+
+  // Pre-warm neural face recognition models in background so face verification is instant
+  initServerFaceEngine().catch((err) =>
+    console.error('Background face engine pre-warming warning:', err),
+  );
 }
 void bootstrap();
