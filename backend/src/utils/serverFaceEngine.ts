@@ -1,6 +1,5 @@
 import * as tf from '@tensorflow/tfjs';
-import '@tensorflow/tfjs-backend-wasm';
-import * as faceapi from '@vladmandic/face-api/dist/face-api.node-wasm.js';
+import * as faceapi from '@vladmandic/face-api';
 import jpeg from 'jpeg-js';
 import { PNG } from 'pngjs';
 import { Logger } from '@nestjs/common';
@@ -17,9 +16,15 @@ export async function initServerFaceEngine(): Promise<boolean> {
 
   loadingPromise = (async () => {
     try {
-      logger.log('Initializing TF.js with WASM backend...');
-      await tf.setBackend('wasm');
-      await tf.ready();
+      logger.log('Initializing TF.js engine backend...');
+      try {
+        await tf.setBackend('wasm');
+        await tf.ready();
+      } catch (wasmErr) {
+        logger.warn('WASM backend init failed, falling back to default CPU/JS engine:', wasmErr);
+        await tf.setBackend('cpu');
+        await tf.ready();
+      }
       logger.log(`TF backend ready (${tf.getBackend()}). Downloading FaceAPI models from CDN...`);
 
       await Promise.all([
