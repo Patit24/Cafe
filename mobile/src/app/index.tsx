@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, SafeAreaView, StyleSheet, Modal, FlatList, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { API_BASE_URL } from '@/lib/api';
+import AddEmployeeModal from '@/components/AddEmployeeModal';
 
 export default function AttendanceHome() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [modalVisible, setModalVisible] = useState(false);
+  const [addModalVisible, setAddModalVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [employees, setEmployees] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -71,6 +73,11 @@ export default function AttendanceHome() {
     }
   };
 
+  const handleEmployeeAdded = (newEmp: any) => {
+    setEmployees(prev => [newEmp, ...prev]);
+    loadData(false);
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -87,11 +94,25 @@ export default function AttendanceHome() {
         <TouchableOpacity style={styles.primaryButton} onPress={() => setModalVisible(true)}>
           <Text style={styles.primaryButtonText}>Select Profile to Check In</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={styles.addEmployeeHomeButton} 
+          onPress={() => setAddModalVisible(true)}
+        >
+          <Text style={styles.addEmployeeHomeButtonText}>+ Add New Employee Profile</Text>
+        </TouchableOpacity>
         
         <Text style={styles.instructionText}>
           Find your name first, then look directly at the camera.
         </Text>
       </View>
+
+      {/* Add Employee Form Modal */}
+      <AddEmployeeModal
+        visible={addModalVisible}
+        onClose={() => setAddModalVisible(false)}
+        onEmployeeAdded={handleEmployeeAdded}
+      />
 
       <Modal
         animationType="fade"
@@ -107,9 +128,22 @@ export default function AttendanceHome() {
                 <Text style={styles.modalTitle}>Select Employee Profile</Text>
                 <Text style={styles.modalSubTitle}>Choose your profile to check in or view active duty</Text>
               </View>
-              <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.closeButton}>
-                <Text style={styles.closeButtonText}>✕</Text>
-              </TouchableOpacity>
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <TouchableOpacity 
+                  onPress={() => {
+                    setModalVisible(false);
+                    setAddModalVisible(true);
+                  }}
+                  style={styles.addNewInlineBtn}
+                >
+                  <Text style={styles.addNewInlineBtnText}>+ Add New</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.closeButton}>
+                  <Text style={styles.closeButtonText}>✕</Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             <TextInput
@@ -399,5 +433,37 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     fontSize: 14,
     fontWeight: '500',
+  },
+  addEmployeeHomeButton: {
+    marginTop: 12,
+    backgroundColor: '#7c3aed',
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    width: '90%',
+    alignItems: 'center',
+    shadowColor: '#7c3aed',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  addEmployeeHomeButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  addNewInlineBtn: {
+    backgroundColor: '#f3e8ff',
+    borderWidth: 1,
+    borderColor: '#d8b4fe',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+  },
+  addNewInlineBtnText: {
+    color: '#7c3aed',
+    fontWeight: '700',
+    fontSize: 12,
   },
 });
