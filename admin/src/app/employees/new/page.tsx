@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Camera, Upload, X, Loader2, UserPlus, ArrowLeft, Clock, DollarSign, ShieldCheck } from 'lucide-react';
+import { Camera, Upload, X, Loader2, UserPlus, ArrowLeft, Clock, DollarSign, ShieldCheck, Sparkles } from 'lucide-react';
 import { API_BASE_URL } from '@/lib/api';
 import { generateNeuralFaceEmbedding } from '@/utils/faceEmbedding';
 
@@ -103,236 +103,250 @@ export default function NewEmployeePage() {
       }
 
       const createdEmp = await res.json();
+      const empId = createdEmp.id;
 
-      // Save face authentication photos & 128D neural vectors
-      if (createdEmp?.id) {
-        const angles: Array<'front' | 'left' | 'right' | 'top'> = ['front', 'left', 'right', 'top'];
-        for (const angle of angles) {
-          const photoData = facePhotos[angle];
-          if (photoData) {
-            try {
-              const faceEmbedding = await generateNeuralFaceEmbedding(photoData);
+      // Upload multi-angle photos & embeddings
+      const angles: ('front' | 'left' | 'right' | 'top')[] = ['front', 'left', 'right', 'top'];
+      for (const angle of angles) {
+        const photoData = facePhotos[angle];
+        if (photoData) {
+          try {
+            const embedding = generateNeuralFaceEmbedding(photoData);
 
-              if (!faceEmbedding) {
-                console.warn(`[FaceAPI] Could not detect face in ${angle} photo, skipping.`);
-                continue;
-              }
-
-              await fetch(`${API_BASE_URL}/employees/${createdEmp.id}/faces`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  imageUrl: photoData,
-                  angle: angle,
-                  faceEmbedding: faceEmbedding,
-                }),
-              });
-            } catch (imgErr) {
-              console.error(`Failed to upload ${angle} face photo:`, imgErr);
-            }
+            await fetch(`${API_BASE_URL}/face/enroll`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                employeeId: empId,
+                angleLabel: angle,
+                imageUrl: photoData,
+                embedding: embedding,
+              }),
+            });
+          } catch (err) {
+            console.error(`Failed to save face angle ${angle}:`, err);
           }
         }
       }
 
       router.push('/employees');
     } catch (err) {
-      console.error(err);
-      alert('Failed to save employee profile. Please try again.');
+      console.error('Failed to create employee:', err);
+      alert('Error creating employee. Check backend logs.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const ANGLES: Array<{ key: 'front' | 'left' | 'right' | 'top'; label: string; desc: string }> = [
-    { key: 'front', label: 'Front View', desc: 'Direct face photo' },
-    { key: 'left', label: 'Left Profile', desc: 'Turn head left' },
-    { key: 'right', label: 'Right Profile', desc: 'Turn head right' },
+  const photoSlots: { key: 'front' | 'left' | 'right' | 'top'; label: string; desc: string }[] = [
+    { key: 'front', label: 'Front Facing (Default)', desc: 'Direct camera view' },
+    { key: 'left', label: 'Left Angle View', desc: 'Slight left profile' },
+    { key: 'right', label: 'Right Angle View', desc: 'Slight right profile' },
     { key: 'top', label: 'Top / Tilt View', desc: 'Slight upward tilt' },
   ];
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] text-slate-800 p-8">
+    <div className="p-3.5 sm:p-6 lg:p-8 pb-24 bg-slate-900 text-slate-100 min-h-screen">
       {/* Header */}
-      <header className="flex justify-between items-center mb-8 border-b border-slate-200 pb-4 max-w-4xl mx-auto">
+      <header className="flex justify-between items-center mb-8 border-b border-slate-800/80 pb-4 max-w-4xl mx-auto">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-2.5">
-            <UserPlus className="text-purple-600" size={30} />
+          <div className="flex items-center gap-2.5">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-500/15 text-purple-400 border border-purple-500/30">
+              <Sparkles size={12} /> Onboarding & Biometrics
+            </span>
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight mt-1 flex items-center gap-2.5">
+            <UserPlus className="text-purple-400" size={28} />
             Create Employee Profile
           </h1>
-          <p className="text-sm text-slate-500 mt-1">Set up staff details, assigned duty hours, and 4-angle face authentication credentials.</p>
+          <p className="text-xs sm:text-sm text-slate-400 font-medium mt-0.5">
+            Set up staff details, assigned duty hours, base salary rates, and 4-angle face authentication credentials.
+          </p>
         </div>
-        <Link href="/employees" className="bg-white text-slate-700 border border-slate-300 px-5 py-2.5 rounded-lg text-sm font-semibold hover:bg-slate-50 flex items-center gap-2 transition-all">
+        <Link 
+          href="/employees" 
+          className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2"
+        >
           <ArrowLeft size={16} />
           Back to Directory
         </Link>
       </header>
 
       {/* Main Form Container */}
-      <div className="bg-white rounded-2xl p-8 max-w-4xl mx-auto border border-slate-200 shadow-sm">
-        <div className="flex flex-col gap-6">
-          
-          {/* Basic Details Section */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="bg-slate-800/80 backdrop-blur-md rounded-3xl p-6 sm:p-8 max-w-4xl mx-auto border border-slate-700/80 shadow-2xl space-y-8">
+        
+        {/* Basic Details Section */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-300 mb-2">
+              Full Name <span className="text-rose-400">*</span>
+            </label>
+            <input 
+              type="text" 
+              value={newEmployee.name}
+              onChange={(e) => setNewEmployee({...newEmployee, name: e.target.value})}
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-sm font-medium outline-none focus:border-purple-500 transition-all placeholder-slate-500"
+              placeholder="e.g. Rahul Das"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-300 mb-2">
+              Role / Position <span className="text-purple-400">*</span>
+            </label>
+            <input 
+              type="text" 
+              value={newEmployee.role}
+              onChange={(e) => setNewEmployee({...newEmployee, role: e.target.value})}
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-sm font-medium outline-none focus:border-purple-500 transition-all placeholder-slate-500"
+              placeholder="e.g. Kitchen Chef, Head Cook, Staff"
+            />
+            <span className="text-[11px] text-slate-500 mt-1 block font-mono">This role will be saved to your PostgreSQL database.</span>
+          </div>
+        </div>
+
+        {/* Payroll & Salary Section */}
+        <div className="p-5 bg-slate-900/90 rounded-2xl border border-slate-700/80 space-y-4">
+          <h2 className="text-sm font-extrabold text-white flex items-center gap-2">
+            <DollarSign className="text-emerald-400" size={18} />
+            Payroll & Base Salary Configuration
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-bold text-slate-900 mb-1.5">
-                Full Name <span className="text-red-500">*</span>
-              </label>
+              <label className="block text-xs font-bold text-slate-400 mb-1">Salary Payment Cycle</label>
+              <select 
+                value={newEmployee.salaryType}
+                onChange={(e) => setNewEmployee({...newEmployee, salaryType: e.target.value})}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white text-xs font-bold outline-none focus:border-purple-500"
+              >
+                <option value="monthly">Monthly (Base ÷ 30 Days = Daily ÷ 24 Hours)</option>
+                <option value="daily">Daily Pay</option>
+                <option value="hourly">Hourly Pay</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-400 mb-1">Base Monthly Salary Rate (₹)</label>
               <input 
                 type="text" 
-                value={newEmployee.name}
-                onChange={(e) => setNewEmployee({...newEmployee, name: e.target.value})}
-                className="w-full bg-white border border-slate-300 rounded-xl p-3 text-slate-900 text-sm font-medium outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100 transition-all"
-                placeholder="e.g. Rahul Das"
+                value={newEmployee.baseRate}
+                onChange={(e) => setNewEmployee({...newEmployee, baseRate: e.target.value})}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white text-sm font-bold font-mono outline-none focus:border-purple-500"
+                placeholder="15000"
               />
             </div>
+          </div>
+        </div>
 
+        {/* Duty Shift Section */}
+        <div className="p-5 bg-slate-900/90 rounded-2xl border border-slate-700/80 space-y-4">
+          <h2 className="text-sm font-extrabold text-white flex items-center gap-2">
+            <Clock className="text-purple-400" size={18} />
+            Assigned Duty Shift Hours
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-bold text-slate-900 mb-1.5">
-                Role / Position <span className="text-purple-600">*</span>
-              </label>
+              <label className="block text-xs font-bold text-slate-400 mb-1">Shift Start Time</label>
               <input 
-                type="text" 
-                value={newEmployee.role}
-                onChange={(e) => setNewEmployee({...newEmployee, role: e.target.value})}
-                className="w-full bg-white border border-slate-300 rounded-xl p-3 text-slate-900 text-sm font-medium outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100 transition-all"
-                placeholder="e.g. Kitchen Chef, Head Cook, Staff"
+                type="time" 
+                value={newEmployee.dutyStartTime}
+                onChange={(e) => setNewEmployee({...newEmployee, dutyStartTime: e.target.value})}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white text-sm font-bold font-mono outline-none focus:border-purple-500"
               />
-              <span className="text-[11px] text-slate-400 mt-1 block">This role will be saved to your PostgreSQL database.</span>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-400 mb-1">Shift End Time</label>
+              <input 
+                type="time" 
+                value={newEmployee.dutyEndTime}
+                onChange={(e) => setNewEmployee({...newEmployee, dutyEndTime: e.target.value})}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white text-sm font-bold font-mono outline-none focus:border-purple-500"
+              />
             </div>
           </div>
+        </div>
 
-          {/* Payroll & Salary Section */}
-          <div className="p-5 bg-slate-50 rounded-xl border border-slate-200">
-            <h2 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
-              <DollarSign className="text-emerald-600" size={18} />
-              Payroll & Base Salary Configuration
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Salary Payment Cycle</label>
-                <select 
-                  value={newEmployee.salaryType}
-                  onChange={(e) => setNewEmployee({...newEmployee, salaryType: e.target.value})}
-                  className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-slate-900 text-sm font-semibold outline-none focus:border-purple-600"
-                >
-                  <option value="monthly">Monthly (Base ₹15,000 / 30 = ₹500/day)</option>
-                  <option value="daily">Daily Pay</option>
-                  <option value="hourly">Hourly Pay</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Base Salary Rate (₹)</label>
-                <input 
-                  type="text" 
-                  value={newEmployee.baseRate}
-                  onChange={(e) => setNewEmployee({...newEmployee, baseRate: e.target.value})}
-                  className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-slate-900 text-sm font-semibold outline-none focus:border-purple-600"
-                  placeholder="e.g. 15000"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Assigned Duty Hours (Start to End Time) */}
-          <div className="p-5 bg-purple-50/50 rounded-xl border border-purple-100">
-            <h2 className="text-sm font-bold text-slate-900 mb-1 flex items-center gap-2">
-              <Clock className="text-purple-600" size={18} />
-              Assigned Duty Hours (Shift Start to End)
-            </h2>
-            <p className="text-xs text-slate-500 mb-4">
-              Duty start time is used by the penalty engine to calculate late arrival deductions (10 mins late = 1 hr deduction, 30 mins late = 2 hrs deduction).
-            </p>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <span className="text-xs font-semibold text-slate-700">Duty Start Time</span>
-                <input 
-                  type="time" 
-                  value={newEmployee.dutyStartTime}
-                  onChange={(e) => setNewEmployee({...newEmployee, dutyStartTime: e.target.value})}
-                  className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-slate-900 text-sm font-semibold mt-1 outline-none focus:border-purple-600"
-                />
-              </div>
-              <div>
-                <span className="text-xs font-semibold text-slate-700">Duty End Time</span>
-                <input 
-                  type="time" 
-                  value={newEmployee.dutyEndTime}
-                  onChange={(e) => setNewEmployee({...newEmployee, dutyEndTime: e.target.value})}
-                  className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-slate-900 text-sm font-semibold mt-1 outline-none focus:border-purple-600"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* 4 Angle Face Authentication Photos */}
-          <div className="pt-4 border-t border-slate-200">
-            <h2 className="text-base font-bold text-slate-900 mb-1 flex items-center gap-2">
-              <ShieldCheck className="text-purple-600" size={20} />
+        {/* 4-Angle Face Enrollment Section */}
+        <div className="p-5 bg-slate-900/90 rounded-2xl border border-slate-700/80 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-extrabold text-white flex items-center gap-2">
+              <Camera className="text-purple-400" size={18} />
               Face Authentication Credentials (4 Angles)
             </h2>
-            <p className="text-xs text-slate-500 mb-4">
-              Upload photos from 4 angles to generate neural face embeddings for automatic kiosk check-in verification.
-            </p>
+            <span className="text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2.5 py-1 rounded-full">
+              Optional / Recommended
+            </span>
+          </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              {ANGLES.map(({ key, label, desc }) => (
-                <div key={key} className="flex flex-col items-center">
-                  <span className="text-xs font-semibold text-slate-700 mb-1.5">{label}</span>
-                  <div className="relative w-full aspect-square bg-slate-50 border-2 border-dashed border-slate-300 rounded-2xl overflow-hidden flex flex-col items-center justify-center group hover:border-purple-500 transition-colors">
-                    {facePhotos[key] ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
+            {photoSlots.map((slot) => {
+              const photo = facePhotos[slot.key];
+
+              return (
+                <div 
+                  key={slot.key} 
+                  className="bg-slate-800/80 border border-slate-700/80 rounded-2xl p-3 flex flex-col justify-between space-y-3 relative group"
+                >
+                  <div className="space-y-0.5">
+                    <h3 className="font-extrabold text-white text-xs">{slot.label}</h3>
+                    <p className="text-[10px] text-slate-400">{slot.desc}</p>
+                  </div>
+
+                  <div className="aspect-square w-full rounded-xl bg-slate-950 border border-slate-800 overflow-hidden relative flex items-center justify-center">
+                    {photo ? (
                       <>
-                        <img src={facePhotos[key]!} alt={label} className="w-full h-full object-cover" />
+                        <img src={photo} alt={slot.label} className="w-full h-full object-cover" />
                         <button
                           type="button"
-                          onClick={() => handleRemovePhoto(key)}
-                          className="absolute top-2 right-2 bg-red-600 text-white p-1 rounded-full shadow-md hover:bg-red-700 transition-colors"
+                          onClick={() => handleRemovePhoto(slot.key)}
+                          className="absolute top-2 right-2 w-7 h-7 rounded-full bg-slate-950/80 text-rose-400 hover:text-white flex items-center justify-center border border-slate-700"
                         >
                           <X size={14} />
                         </button>
                       </>
                     ) : (
-                      <label className="w-full h-full flex flex-col items-center justify-center cursor-pointer p-3 text-center">
-                        <Upload size={22} className="text-slate-400 mb-1 group-hover:text-purple-600 transition-colors" />
-                        <span className="text-xs font-semibold text-slate-700">Upload {label}</span>
-                        <span className="text-[10px] text-slate-400 mt-0.5">{desc}</span>
+                      <label className="w-full h-full flex flex-col items-center justify-center cursor-pointer hover:bg-slate-900/60 transition-colors p-3 text-center">
+                        <Upload size={24} className="text-purple-400 mb-1.5" />
+                        <span className="text-xs font-bold text-slate-300">Upload Photo</span>
+                        <span className="text-[9px] text-slate-500 mt-0.5">JPEG / PNG</span>
                         <input
                           type="file"
                           accept="image/*"
                           className="hidden"
-                          onChange={(e) => handlePhotoSelect(key, e.target.files?.[0] || null)}
+                          onChange={(e) => handlePhotoSelect(slot.key, e.target.files?.[0] || null)}
                         />
                       </label>
                     )}
                   </div>
                 </div>
-              ))}
-            </div>
+              );
+            })}
           </div>
+        </div>
 
-          {/* Action Buttons */}
-          <div className="flex justify-end gap-3 mt-6 pt-6 border-t border-slate-200">
-            <Link 
-              href="/employees"
-              className="px-6 py-3 text-slate-600 hover:text-slate-900 font-semibold text-sm rounded-xl transition-all"
-            >
-              Cancel
-            </Link>
-            <button 
-              onClick={handleSaveEmployee}
-              disabled={isSubmitting}
-              className="bg-purple-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2 shadow-md shadow-purple-200 text-sm transition-all"
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="animate-spin" size={18} />
-                  Saving Profile & Face Credentials...
-                </>
-              ) : (
-                'Save Employee Profile'
-              )}
-            </button>
-          </div>
-
+        {/* Submit Actions */}
+        <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-700/80">
+          <Link
+            href="/employees"
+            className="py-3 px-6 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl border border-slate-700 transition-all"
+          >
+            Cancel
+          </Link>
+          <button
+            onClick={handleSaveEmployee}
+            disabled={isSubmitting}
+            className="py-3 px-8 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-purple-600/25 transition-all flex items-center gap-2 disabled:opacity-50"
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 size={16} className="animate-spin" /> Saving Profile...
+              </>
+            ) : (
+              <>
+                <ShieldCheck size={16} /> Complete Profile Creation
+              </>
+            )}
+          </button>
         </div>
       </div>
     </div>

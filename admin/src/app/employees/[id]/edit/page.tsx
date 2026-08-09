@@ -4,7 +4,7 @@ import { API_BASE_URL } from '@/lib/api';
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
-import { Camera, User, ArrowLeft, Clock, DollarSign, Loader2 } from 'lucide-react';
+import { Camera, User, ArrowLeft, Clock, DollarSign, Loader2, Save, ShieldCheck, Sparkles } from 'lucide-react';
 
 export default function EditEmployeePage() {
   const router = useRouter();
@@ -77,147 +77,159 @@ export default function EditEmployeePage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#f8fafc] flex justify-center items-center font-semibold text-slate-600 gap-2">
-        <Loader2 className="animate-spin text-purple-600" size={24} />
+      <div className="min-h-screen bg-slate-900 flex justify-center items-center font-bold text-slate-300 gap-3">
+        <Loader2 className="animate-spin text-purple-400" size={24} />
         Loading employee profile...
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] text-slate-800 p-8">
+    <div className="p-3.5 sm:p-6 lg:p-8 pb-24 bg-slate-900 text-slate-100 min-h-screen">
       {/* Header */}
-      <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 border-b border-slate-200 pb-4 max-w-2xl mx-auto gap-4">
+      <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 border-b border-slate-800/80 pb-4 max-w-2xl mx-auto gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-2.5">
-            <User size={28} className="text-purple-600" />
+          <div className="flex items-center gap-2.5">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-500/15 text-purple-400 border border-purple-500/30">
+              <Sparkles size={12} /> Edit Staff Credentials
+            </span>
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight mt-1 flex items-center gap-2.5">
+            <User size={28} className="text-purple-400" />
             Edit Employee Profile
           </h1>
-          <p className="text-sm text-slate-500 mt-1">Update employee credentials, role/position, and duty shift hours.</p>
+          <p className="text-xs sm:text-sm text-slate-400 font-medium mt-0.5">
+            Update employee credentials, role/position, and duty shift hours.
+          </p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-2.5">
           <button 
             onClick={() => router.push(`/employees/${id}/faces`)}
-            className="bg-purple-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-purple-700 transition-all shadow-sm flex items-center gap-2"
+            className="bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/40 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
           >
-            <Camera size={16} />
-            Face Credentials
+            <Camera size={14} /> Manage Faces
           </button>
-          <Link href="/employees" className="bg-white text-slate-700 border border-slate-300 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-50 flex items-center gap-2 transition-all">
-            <ArrowLeft size={16} />
-            Back
+          <Link
+            href="/employees"
+            className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
+          >
+            <ArrowLeft size={14} /> Back
           </Link>
         </div>
       </header>
 
       {/* Main Form Container */}
-      <div className="bg-white rounded-2xl p-8 max-w-2xl mx-auto border border-slate-200 shadow-sm">
-        <div className="flex flex-col gap-6">
-          
-          <div>
-            <label className="block text-sm font-bold text-slate-900 mb-1.5">Full Name</label>
-            <input 
-              type="text" 
-              value={employee.name}
-              onChange={(e) => setEmployee({...employee, name: e.target.value})}
-              className="w-full bg-white border border-slate-300 rounded-xl p-3 text-slate-900 text-sm font-medium outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100 transition-all"
-            />
-          </div>
+      <div className="bg-slate-800/80 backdrop-blur-md rounded-3xl p-6 sm:p-8 max-w-2xl mx-auto border border-slate-700/80 shadow-2xl space-y-6">
+        <div>
+          <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-300 mb-2">
+            Full Name <span className="text-rose-400">*</span>
+          </label>
+          <input 
+            type="text" 
+            value={employee.name}
+            onChange={(e) => setEmployee({...employee, name: e.target.value})}
+            className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-sm font-medium outline-none focus:border-purple-500 transition-all placeholder-slate-500"
+            placeholder="Full Name"
+          />
+        </div>
 
-          <div>
-            <label className="block text-sm font-bold text-slate-900 mb-1.5">
-              Role / Position <span className="text-purple-600">*</span>
-            </label>
-            <input 
-              type="text" 
-              value={employee.role}
-              onChange={(e) => setEmployee({...employee, role: e.target.value})}
-              className="w-full bg-white border border-slate-300 rounded-xl p-3 text-slate-900 text-sm font-medium outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-100 transition-all"
-              placeholder="e.g. Kitchen Chef, Head Cook, Staff"
-            />
-            <span className="text-[11px] text-slate-400 mt-1 block">Role will be saved directly to your PostgreSQL database.</span>
-          </div>
+        <div>
+          <label className="block text-xs font-extrabold uppercase tracking-wider text-slate-300 mb-2">
+            Role / Position <span className="text-purple-400">*</span>
+          </label>
+          <input 
+            type="text" 
+            value={employee.role}
+            onChange={(e) => setEmployee({...employee, role: e.target.value})}
+            className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white text-sm font-medium outline-none focus:border-purple-500 transition-all placeholder-slate-500"
+            placeholder="Role / Position"
+          />
+        </div>
 
-          {/* Salary Section */}
-          <div className="p-5 bg-slate-50 rounded-xl border border-slate-200">
-            <h2 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
-              <DollarSign className="text-emerald-600" size={18} />
-              Payroll & Base Salary Configuration
-            </h2>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Salary Payment Cycle</label>
-                <select 
-                  value={employee.salaryType}
-                  onChange={(e) => setEmployee({...employee, salaryType: e.target.value})}
-                  className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-slate-900 text-sm font-semibold outline-none focus:border-purple-600"
-                >
-                  <option value="monthly">Monthly</option>
-                  <option value="daily">Daily</option>
-                  <option value="hourly">Hourly</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Base Salary Rate (₹)</label>
-                <input 
-                  type="text" 
-                  value={employee.baseRate}
-                  onChange={(e) => setEmployee({...employee, baseRate: e.target.value})}
-                  className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-slate-900 text-sm font-semibold outline-none focus:border-purple-600"
-                />
-              </div>
+        {/* Payroll & Salary Section */}
+        <div className="p-5 bg-slate-900/90 rounded-2xl border border-slate-700/80 space-y-4">
+          <h2 className="text-sm font-extrabold text-white flex items-center gap-2">
+            <DollarSign className="text-emerald-400" size={18} />
+            Payroll & Base Salary Configuration
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-400 mb-1">Salary Payment Cycle</label>
+              <select 
+                value={employee.salaryType}
+                onChange={(e) => setEmployee({...employee, salaryType: e.target.value})}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white text-xs font-bold outline-none focus:border-purple-500"
+              >
+                <option value="monthly">Monthly (Base ÷ 30 Days = Daily ÷ 24 Hours)</option>
+                <option value="daily">Daily Pay</option>
+                <option value="hourly">Hourly Pay</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-400 mb-1">Base Monthly Salary Rate (₹)</label>
+              <input 
+                type="text" 
+                value={employee.baseRate}
+                onChange={(e) => setEmployee({...employee, baseRate: e.target.value})}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white text-sm font-bold font-mono outline-none focus:border-purple-500"
+                placeholder="15000"
+              />
             </div>
           </div>
+        </div>
 
-          {/* Assigned Duty Hours (Start to End Time) */}
-          <div className="p-5 bg-purple-50/50 rounded-xl border border-purple-100">
-            <h2 className="text-sm font-bold text-slate-900 mb-1 flex items-center gap-2">
-              <Clock className="text-purple-600" size={18} />
-              Assigned Duty Hours (Shift Start to End)
-            </h2>
-            <p className="text-xs text-slate-500 mb-4">
-              Duty start time is used to enforce late arrival penalties (10 mins late = 1 hr deduction, 30 mins late = 2 hrs deduction).
-            </p>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <span className="text-xs font-semibold text-slate-700">Duty Start Time</span>
-                <input 
-                  type="time" 
-                  value={employee.dutyStartTime}
-                  onChange={(e) => setEmployee({...employee, dutyStartTime: e.target.value})}
-                  className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-slate-900 text-sm font-semibold mt-1 outline-none focus:border-purple-600"
-                />
-              </div>
-              <div>
-                <span className="text-xs font-semibold text-slate-700">Duty End Time</span>
-                <input 
-                  type="time" 
-                  value={employee.dutyEndTime}
-                  onChange={(e) => setEmployee({...employee, dutyEndTime: e.target.value})}
-                  className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-slate-900 text-sm font-semibold mt-1 outline-none focus:border-purple-600"
-                />
-              </div>
+        {/* Duty Shift Section */}
+        <div className="p-5 bg-slate-900/90 rounded-2xl border border-slate-700/80 space-y-4">
+          <h2 className="text-sm font-extrabold text-white flex items-center gap-2">
+            <Clock className="text-purple-400" size={18} />
+            Assigned Duty Shift Hours
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-400 mb-1">Shift Start Time</label>
+              <input 
+                type="time" 
+                value={employee.dutyStartTime}
+                onChange={(e) => setEmployee({...employee, dutyStartTime: e.target.value})}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white text-sm font-bold font-mono outline-none focus:border-purple-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-400 mb-1">Shift End Time</label>
+              <input 
+                type="time" 
+                value={employee.dutyEndTime}
+                onChange={(e) => setEmployee({...employee, dutyEndTime: e.target.value})}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white text-sm font-bold font-mono outline-none focus:border-purple-500"
+              />
             </div>
           </div>
+        </div>
 
-          {/* Actions */}
-          <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-slate-200">
-            <Link 
-              href="/employees"
-              className="px-6 py-2.5 text-slate-600 hover:text-slate-900 font-semibold text-sm rounded-xl transition-all"
-            >
-              Cancel
-            </Link>
-            <button 
-              onClick={handleUpdateEmployee}
-              disabled={isSubmitting}
-              className="bg-purple-600 text-white px-8 py-2.5 rounded-xl font-bold hover:bg-purple-700 disabled:opacity-50 text-sm shadow-md shadow-purple-200 transition-all flex items-center gap-2"
-            >
-              {isSubmitting ? <Loader2 className="animate-spin" size={16} /> : null}
-              {isSubmitting ? 'Updating Profile...' : 'Update Employee'}
-            </button>
-          </div>
-
+        {/* Submit Actions */}
+        <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-700/80">
+          <Link
+            href="/employees"
+            className="py-3 px-6 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl border border-slate-700 transition-all"
+          >
+            Cancel
+          </Link>
+          <button
+            onClick={handleUpdateEmployee}
+            disabled={isSubmitting}
+            className="py-3 px-8 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-purple-600/25 transition-all flex items-center gap-2 disabled:opacity-50"
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 size={16} className="animate-spin" /> Saving...
+              </>
+            ) : (
+              <>
+                <Save size={16} /> Save Changes
+              </>
+            )}
+          </button>
         </div>
       </div>
     </div>
