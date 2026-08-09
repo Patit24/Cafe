@@ -55,6 +55,15 @@ export default function AttendanceHome() {
   const timeString = currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const dateString = currentTime.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' });
 
+  // Analog Clock Calculations
+  const seconds = currentTime.getSeconds();
+  const minutes = currentTime.getMinutes();
+  const hours = currentTime.getHours();
+
+  const secondDeg = seconds * 6;
+  const minuteDeg = (minutes + seconds / 60) * 6;
+  const hourDeg = ((hours % 12) + minutes / 60) * 30;
+
   const filteredEmployees = employees.filter(emp => 
     (emp.name || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -97,17 +106,69 @@ export default function AttendanceHome() {
         <Text style={styles.brandSubtitle}>Kitchen Staff Attendance Portal</Text>
       </View>
 
-      {/* Futuristic Clock Card */}
+      {/* Futuristic Analog Clock Card */}
       <View style={styles.clockCard}>
         <View style={styles.clockHeaderRow}>
-          <Text style={styles.clockLabel}>REAL-TIME KITCHEN CLOCK</Text>
+          <Text style={styles.clockLabel}>REAL-TIME ANALOG CLOCK</Text>
           <View style={styles.liveBadge}>
             <Text style={styles.liveBadgeText}>LIVE</Text>
           </View>
         </View>
-        <Text style={styles.timeText}>{timeString}</Text>
-        <View style={styles.dateRow}>
-          <Text style={styles.dateText}>{dateString}</Text>
+
+        {/* 2026 Glowing Analog Clock Dial */}
+        <View style={styles.analogClockFace}>
+          {/* Dial Numbers */}
+          <Text style={[styles.dialNumber, styles.num12]}>12</Text>
+          <Text style={[styles.dialNumber, styles.num3]}>3</Text>
+          <Text style={[styles.dialNumber, styles.num6]}>6</Text>
+          <Text style={[styles.dialNumber, styles.num9]}>9</Text>
+
+          {/* Dial Hour Ticks */}
+          {[0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330].map((deg) => (
+            <View
+              key={deg}
+              style={[
+                styles.tickMark,
+                { transform: [{ rotate: `${deg}deg` }, { translateY: -76 }] },
+              ]}
+            />
+          ))}
+
+          {/* Hour Hand */}
+          <View
+            style={[
+              styles.hand,
+              styles.hourHand,
+              { transform: [{ rotate: `${hourDeg}deg` }] },
+            ]}
+          />
+
+          {/* Minute Hand */}
+          <View
+            style={[
+              styles.hand,
+              styles.minuteHand,
+              { transform: [{ rotate: `${minuteDeg}deg` }] },
+            ]}
+          />
+
+          {/* Second Hand */}
+          <View
+            style={[
+              styles.hand,
+              styles.secondHand,
+              { transform: [{ rotate: `${secondDeg}deg` }] },
+            ]}
+          />
+
+          {/* Center Pivot */}
+          <View style={styles.centerPivot} />
+        </View>
+
+        {/* Digital Time Sub-Pill */}
+        <View style={styles.digitalSubPill}>
+          <Text style={styles.digitalTimeText}>{timeString}</Text>
+          <Text style={styles.dateText}>• {dateString}</Text>
         </View>
       </View>
 
@@ -247,7 +308,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#090D16',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: Platform.OS === 'ios' ? 20 : 36,
+    paddingVertical: Platform.OS === 'ios' ? 20 : 28,
     paddingHorizontal: 18,
   },
   topGlowCircle: {
@@ -261,7 +322,7 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    marginTop: 16,
+    marginTop: 10,
   },
   badgePill: {
     flexDirection: 'row',
@@ -269,10 +330,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#0F172A',
     borderWidth: 1,
     borderColor: '#1E293B',
-    paddingVertical: 6,
+    paddingVertical: 5,
     paddingHorizontal: 14,
     borderRadius: 20,
-    marginBottom: 12,
+    marginBottom: 8,
   },
   badgePulseDot: {
     width: 6,
@@ -288,15 +349,15 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
   },
   brandTitle: {
-    fontSize: 34,
+    fontSize: 32,
     fontWeight: '800',
     color: '#F8FAFC',
     letterSpacing: -0.8,
   },
   brandSubtitle: {
-    fontSize: 15,
+    fontSize: 14,
     color: '#94A3B8',
-    marginTop: 4,
+    marginTop: 2,
     fontWeight: '500',
   },
   clockCard: {
@@ -305,8 +366,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#1E293B',
     borderRadius: 24,
-    paddingVertical: 32,
-    paddingHorizontal: 24,
+    paddingVertical: 20,
+    paddingHorizontal: 20,
     alignItems: 'center',
     shadowColor: '#38BDF8',
     shadowOffset: { width: 0, height: 8 },
@@ -319,7 +380,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     width: '100%',
-    marginBottom: 12,
+    marginBottom: 14,
   },
   clockLabel: {
     fontSize: 11,
@@ -340,26 +401,105 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
   },
-  timeText: {
-    fontSize: 52,
-    fontWeight: '800',
-    color: '#F8FAFC',
-    letterSpacing: -1,
-    fontVariant: ['tabular-nums'],
-    marginVertical: 4,
+  analogClockFace: {
+    width: 170,
+    height: 170,
+    borderRadius: 85,
+    backgroundColor: '#090D16',
+    borderWidth: 2,
+    borderColor: '#38BDF8',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+    marginVertical: 6,
+    shadowColor: '#38BDF8',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
   },
-  dateRow: {
-    marginTop: 8,
+  dialNumber: {
+    position: 'absolute',
+    color: '#94A3B8',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  num12: { top: 8 },
+  num3: { right: 10 },
+  num6: { bottom: 8 },
+  num9: { left: 10 },
+  tickMark: {
+    position: 'absolute',
+    width: 2,
+    height: 6,
+    backgroundColor: 'rgba(56, 189, 248, 0.4)',
+    borderRadius: 1,
+  },
+  hand: {
+    position: 'absolute',
+    bottom: '50%',
+    left: '50%',
+  },
+  hourHand: {
+    width: 4,
+    height: 44,
+    backgroundColor: '#38BDF8',
+    borderRadius: 3,
+    marginLeft: -2,
+    transformOrigin: 'bottom center',
+  },
+  minuteHand: {
+    width: 3,
+    height: 62,
+    backgroundColor: '#C084FC',
+    borderRadius: 2,
+    marginLeft: -1.5,
+    transformOrigin: 'bottom center',
+  },
+  secondHand: {
+    width: 2,
+    height: 72,
+    backgroundColor: '#F43F5E',
+    borderRadius: 1,
+    marginLeft: -1,
+    transformOrigin: 'bottom center',
+  },
+  centerPivot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#F43F5E',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    position: 'absolute',
+    zIndex: 10,
+  },
+  digitalSubPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 14,
+    backgroundColor: '#1E293B',
+    borderWidth: 1,
+    borderColor: '#334155',
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+  },
+  digitalTimeText: {
+    color: '#F8FAFC',
+    fontSize: 15,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
   },
   dateText: {
-    fontSize: 16,
+    fontSize: 13,
     color: '#38BDF8',
     fontWeight: '600',
   },
   actionContainer: {
     width: '100%',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   primaryButton: {
     backgroundColor: '#2563EB',
@@ -402,7 +542,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   instructionBadge: {
-    marginTop: 16,
+    marginTop: 14,
     backgroundColor: '#0F172A',
     borderWidth: 1,
     borderColor: '#1E293B',
