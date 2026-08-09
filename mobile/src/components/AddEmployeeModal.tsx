@@ -112,8 +112,8 @@ export default function AddEmployeeModal({
         <View style={styles.modalContent}>
           <View style={styles.header}>
             <View>
-              <Text style={styles.title}>Add New Employee</Text>
-              <Text style={styles.subtitle}>Save profile details to PostgreSQL database</Text>
+              <Text style={styles.title}>Add New Staff Profile</Text>
+              <Text style={styles.subtitle}>Save profile & payroll settings to database</Text>
             </View>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
               <Text style={styles.closeBtnText}>✕</Text>
@@ -124,12 +124,12 @@ export default function AddEmployeeModal({
             {/* Full Name */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>
-                Full Name <Text style={styles.required}>*</Text>
+                👤 Full Name <Text style={styles.required}>*</Text>
               </Text>
               <TextInput
                 style={styles.input}
                 placeholder="e.g. Rahul Das"
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor="#64748B"
                 value={name}
                 onChangeText={setName}
               />
@@ -137,11 +137,11 @@ export default function AddEmployeeModal({
 
             {/* Role / Position */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Role / Position</Text>
+              <Text style={styles.label}>💼 Role / Position</Text>
               <TextInput
                 style={styles.input}
                 placeholder="e.g. Kitchen Chef, Head Cook, Waiter"
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor="#64748B"
                 value={role}
                 onChangeText={setRole}
               />
@@ -149,7 +149,7 @@ export default function AddEmployeeModal({
 
             {/* Salary Type Selection */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Salary Payment Cycle</Text>
+              <Text style={styles.label}>📊 Salary Payment Cycle</Text>
               <View style={styles.pillRow}>
                 <TouchableOpacity
                   style={[
@@ -206,11 +206,11 @@ export default function AddEmployeeModal({
 
             {/* Base Salary Rate */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Base Salary Rate (₹)</Text>
+              <Text style={styles.label}>💰 Base Salary Rate (₹)</Text>
               <TextInput
                 style={styles.input}
                 placeholder="e.g. 15000"
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor="#64748B"
                 keyboardType="numeric"
                 value={baseRate}
                 onChangeText={setBaseRate}
@@ -219,27 +219,27 @@ export default function AddEmployeeModal({
 
             {/* Shift Duty Hours */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Assigned Duty Hours</Text>
+              <Text style={styles.label}>⏰ Assigned Shift Hours</Text>
               <View style={styles.dutyRow}>
                 <View style={{ flex: 1, marginRight: 8 }}>
-                  <Text style={styles.subLabel}>Duty Start</Text>
+                  <Text style={styles.subLabel}>Shift Start</Text>
                   <TextInput
                     style={styles.input}
                     value={dutyStartTime}
                     onChangeText={setDutyStartTime}
                     placeholder="08:00"
-                    placeholderTextColor="#94a3b8"
+                    placeholderTextColor="#64748B"
                   />
                 </View>
 
                 <View style={{ flex: 1, marginLeft: 8 }}>
-                  <Text style={styles.subLabel}>Duty End</Text>
+                  <Text style={styles.subLabel}>Shift End</Text>
                   <TextInput
                     style={styles.input}
                     value={dutyEndTime}
                     onChangeText={setDutyEndTime}
                     placeholder="17:00"
-                    placeholderTextColor="#94a3b8"
+                    placeholderTextColor="#64748B"
                   />
                 </View>
               </View>
@@ -256,11 +256,12 @@ export default function AddEmployeeModal({
               onPress={handleSave}
               disabled={isSubmitting}
               style={[styles.saveBtn, isSubmitting && styles.saveBtnDisabled]}
+              activeOpacity={0.8}
             >
               {isSubmitting ? (
                 <ActivityIndicator color="#ffffff" size="small" />
               ) : (
-                <Text style={styles.saveBtnText}>Save Employee</Text>
+                <Text style={styles.saveBtnText}>⚡ Save Employee Profile</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -273,83 +274,85 @@ export default function AddEmployeeModal({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.7)',
+    backgroundColor: 'rgba(9, 13, 22, 0.85)',
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: '#ffffff',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    backgroundColor: '#0F172A',
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    borderTopWidth: 1,
+    borderColor: '#1E293B',
     padding: 24,
     maxHeight: '85%',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -10 },
-    shadowOpacity: 0.2,
-    shadowRadius: 20,
-    elevation: 10,
+    shadowOffset: { width: 0, height: -12 },
+    shadowOpacity: 0.4,
+    shadowRadius: 24,
+    elevation: 16,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
-    paddingBottom: 12,
+    marginBottom: 18,
+    paddingBottom: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    borderBottomColor: '#1E293B',
   },
   title: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#0f172a',
+    color: '#F8FAFC',
   },
   subtitle: {
     fontSize: 12,
-    color: '#64748b',
-    marginTop: 2,
+    color: '#94A3B8',
+    marginTop: 3,
   },
   closeBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: '#1E293B',
     alignItems: 'center',
     justifyContent: 'center',
   },
   closeBtnText: {
     fontSize: 16,
-    color: '#475569',
+    color: '#94A3B8',
     fontWeight: '700',
   },
   formScroll: {
     marginBottom: 12,
   },
   inputGroup: {
-    marginBottom: 16,
+    marginBottom: 18,
   },
   label: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#1e293b',
-    marginBottom: 6,
+    color: '#E2E8F0',
+    marginBottom: 8,
   },
   required: {
-    color: '#ef4444',
+    color: '#F43F5E',
   },
   subLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#64748b',
-    marginBottom: 4,
+    color: '#94A3B8',
+    marginBottom: 6,
   },
   input: {
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#1E293B',
     borderWidth: 1,
-    borderColor: '#cbd5e1',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    borderColor: '#334155',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     fontSize: 15,
-    color: '#0f172a',
+    color: '#F8FAFC',
     fontWeight: '500',
   },
   pillRow: {
@@ -358,26 +361,26 @@ const styles = StyleSheet.create({
   },
   typePill: {
     flex: 1,
-    paddingVertical: 10,
+    paddingVertical: 12,
     paddingHorizontal: 8,
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-    backgroundColor: '#f8fafc',
+    borderColor: '#334155',
+    backgroundColor: '#1E293B',
     alignItems: 'center',
     marginHorizontal: 3,
   },
   typePillActive: {
-    borderColor: '#7c3aed',
-    backgroundColor: '#f3e8ff',
+    borderColor: '#8B5CF6',
+    backgroundColor: 'rgba(139, 92, 246, 0.2)',
   },
   typePillText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#64748b',
+    color: '#94A3B8',
   },
   typePillTextActive: {
-    color: '#6d28d9',
+    color: '#C084FC',
     fontWeight: '700',
   },
   dutyRow: {
@@ -387,39 +390,39 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'flex-end',
     alignItems: 'center',
-    paddingTop: 12,
+    paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
+    borderTopColor: '#1E293B',
   },
   cancelBtn: {
-    paddingVertical: 12,
+    paddingVertical: 14,
     paddingHorizontal: 20,
-    borderRadius: 12,
+    borderRadius: 14,
     marginRight: 10,
   },
   cancelBtnText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#64748b',
+    color: '#94A3B8',
   },
   saveBtn: {
-    backgroundColor: '#7c3aed',
-    paddingVertical: 14,
+    backgroundColor: '#7C3AED',
+    paddingVertical: 15,
     paddingHorizontal: 24,
-    borderRadius: 12,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#7c3aed',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowColor: '#7C3AED',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 6,
   },
   saveBtnDisabled: {
     opacity: 0.6,
   },
   saveBtnText: {
-    color: '#ffffff',
+    color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '700',
   },

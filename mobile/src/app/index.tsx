@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, SafeAreaView, StyleSheet, Modal, FlatList, TextInput } from 'react-native';
+import { View, Text, TouchableOpacity, SafeAreaView, StyleSheet, Modal, FlatList, TextInput, StatusBar, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { API_BASE_URL } from '@/lib/api';
 import AddEmployeeModal from '@/components/AddEmployeeModal';
@@ -53,7 +53,7 @@ export default function AttendanceHome() {
   }, []);
 
   const timeString = currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  const dateString = currentTime.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  const dateString = currentTime.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' });
 
   const filteredEmployees = employees.filter(emp => 
     (emp.name || '').toLowerCase().includes(searchQuery.toLowerCase())
@@ -65,10 +65,8 @@ export default function AttendanceHome() {
     
     const activeAtt = attendanceMap[emp.id];
     if (activeAtt) {
-      // Already checked in / working -> Go straight to active duty screen
       router.push(`/duty?employeeId=${emp.id}&employeeName=${encodeURIComponent(emp.name)}&score=${activeAtt.faceMatchScore === '-1' ? 'Manual Photo' : 'Verified'}`);
     } else {
-      // Off duty -> Go to camera for face or manual photo check-in
       router.push(`/camera?employeeId=${emp.id}`);
     }
   };
@@ -78,33 +76,64 @@ export default function AttendanceHome() {
     loadData(false);
   };
 
+  const avatarGradients = [
+    '#3B82F6', '#8B5CF6', '#EC4899', '#10B981', '#F59E0B', '#6366F1'
+  ];
+
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#090D16" />
+      
+      {/* Glow Backdrop Circles */}
+      <View style={styles.topGlowCircle} />
+
+      {/* Header */}
       <View style={styles.header}>
+        <View style={styles.badgePill}>
+          <View style={styles.badgePulseDot} />
+          <Text style={styles.badgePillText}>2026 KIOSK OS • AI VERIFIED</Text>
+        </View>
         <Text style={styles.brandTitle}>Evening Light</Text>
-        <Text style={styles.brandSubtitle}>Kitchen Staff Attendance</Text>
+        <Text style={styles.brandSubtitle}>Kitchen Staff Attendance Portal</Text>
       </View>
 
-      <View style={styles.clockContainer}>
+      {/* Futuristic Clock Card */}
+      <View style={styles.clockCard}>
+        <View style={styles.clockHeaderRow}>
+          <Text style={styles.clockLabel}>REAL-TIME KITCHEN CLOCK</Text>
+          <View style={styles.liveBadge}>
+            <Text style={styles.liveBadgeText}>LIVE</Text>
+          </View>
+        </View>
         <Text style={styles.timeText}>{timeString}</Text>
-        <Text style={styles.dateText}>{dateString}</Text>
+        <View style={styles.dateRow}>
+          <Text style={styles.dateText}>{dateString}</Text>
+        </View>
       </View>
 
+      {/* Action Controls */}
       <View style={styles.actionContainer}>
-        <TouchableOpacity style={styles.primaryButton} onPress={() => setModalVisible(true)}>
-          <Text style={styles.primaryButtonText}>Select Profile to Check In</Text>
+        <TouchableOpacity 
+          style={styles.primaryButton} 
+          onPress={() => setModalVisible(true)}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.primaryButtonText}>✨ Select Profile to Check In</Text>
         </TouchableOpacity>
 
         <TouchableOpacity 
-          style={styles.addEmployeeHomeButton} 
+          style={styles.secondaryButton} 
           onPress={() => setAddModalVisible(true)}
+          activeOpacity={0.85}
         >
-          <Text style={styles.addEmployeeHomeButtonText}>+ Add New Employee Profile</Text>
+          <Text style={styles.secondaryButtonText}>➕ Add New Employee Profile</Text>
         </TouchableOpacity>
         
-        <Text style={styles.instructionText}>
-          Find your name first, then look directly at the camera.
-        </Text>
+        <View style={styles.instructionBadge}>
+          <Text style={styles.instructionText}>
+            💡 Tap your name first, then verify with quick face match.
+          </Text>
+        </View>
       </View>
 
       {/* Add Employee Form Modal */}
@@ -114,8 +143,9 @@ export default function AttendanceHome() {
         onEmployeeAdded={handleEmployeeAdded}
       />
 
+      {/* Profile Selection Modal */}
       <Modal
-        animationType="fade"
+        animationType="slide"
         transparent={true}
         visible={modalVisible}
         onShow={() => loadData(false)}
@@ -125,11 +155,11 @@ export default function AttendanceHome() {
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
               <View>
-                <Text style={styles.modalTitle}>Select Employee Profile</Text>
-                <Text style={styles.modalSubTitle}>Choose your profile to check in or view active duty</Text>
+                <Text style={styles.modalTitle}>Select Profile</Text>
+                <Text style={styles.modalSubTitle}>Choose your account to check in or view duty</Text>
               </View>
 
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                 <TouchableOpacity 
                   onPress={() => {
                     setModalVisible(false);
@@ -148,8 +178,8 @@ export default function AttendanceHome() {
 
             <TextInput
               style={styles.searchInput}
-              placeholder="🔍 Type your name..."
-              placeholderTextColor="#94a3b8"
+              placeholder="🔍 Search employee name..."
+              placeholderTextColor="#64748B"
               value={searchQuery}
               onChangeText={setSearchQuery}
             />
@@ -157,25 +187,28 @@ export default function AttendanceHome() {
             <FlatList
               data={filteredEmployees}
               keyExtractor={(item) => item.id}
-              contentContainerStyle={{ paddingBottom: 16 }}
-              renderItem={({ item }) => {
+              contentContainerStyle={{ paddingBottom: 24 }}
+              renderItem={({ item, index }) => {
                 const activeAtt = attendanceMap[item.id];
                 const isWorking = !!activeAtt;
                 const isBreak = activeAtt?.status === 'on_break';
+                const avatarBg = avatarGradients[index % avatarGradients.length];
 
                 return (
                   <TouchableOpacity 
                     style={[styles.employeeCard, isWorking && styles.employeeCardWorking]} 
                     onPress={() => handleSelectEmployee(item)}
+                    activeOpacity={0.8}
                   >
-                    <View style={styles.avatarCircle}>
+                    <View style={[styles.avatarCircle, { backgroundColor: avatarBg }]}>
                       <Text style={styles.avatarText}>
                         {(item.name || 'EL').substring(0, 2).toUpperCase()}
                       </Text>
                     </View>
+
                     <View style={styles.employeeInfo}>
                       <Text style={styles.employeeNameText}>{item.name}</Text>
-                      <Text style={styles.employeeRoleText}>{item.role?.name || 'Kitchen Staff'}</Text>
+                      <Text style={styles.employeeRoleText}>{item.role?.name || item.role || 'Kitchen Staff'}</Text>
                     </View>
 
                     {/* Real-time Duty Status Badge */}
@@ -196,7 +229,7 @@ export default function AttendanceHome() {
               ListEmptyComponent={
                 <View style={styles.emptyContainer}>
                   <Text style={styles.emptyText}>
-                    {loading ? 'Loading employees from backend...' : 'No matching employees found.'}
+                    {loading ? 'Loading staff directory...' : 'No matching employee profile found.'}
                   </Text>
                 </View>
               }
@@ -211,98 +244,196 @@ export default function AttendanceHome() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#faf9f9',
+    backgroundColor: '#090D16',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 40,
-    paddingHorizontal: 16,
+    paddingVertical: Platform.OS === 'ios' ? 20 : 36,
+    paddingHorizontal: 18,
+  },
+  topGlowCircle: {
+    position: 'absolute',
+    top: -100,
+    alignSelf: 'center',
+    width: 320,
+    height: 320,
+    borderRadius: 160,
+    backgroundColor: 'rgba(56, 189, 248, 0.08)',
   },
   header: {
     alignItems: 'center',
-    marginTop: 20,
+    marginTop: 16,
+  },
+  badgePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0F172A',
+    borderWidth: 1,
+    borderColor: '#1E293B',
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    marginBottom: 12,
+  },
+  badgePulseDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#38BDF8',
+    marginRight: 8,
+  },
+  badgePillText: {
+    color: '#38BDF8',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.8,
   },
   brandTitle: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: '#041627',
-    letterSpacing: -0.5,
+    fontSize: 34,
+    fontWeight: '800',
+    color: '#F8FAFC',
+    letterSpacing: -0.8,
   },
   brandSubtitle: {
-    fontSize: 16,
-    color: '#44474c',
+    fontSize: 15,
+    color: '#94A3B8',
     marginTop: 4,
+    fontWeight: '500',
   },
-  clockContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#ffffff',
-    padding: 32,
-    borderRadius: 16,
+  clockCard: {
+    width: '92%',
+    backgroundColor: '#0F172A',
     borderWidth: 1,
-    borderColor: '#c4c6cd',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    elevation: 2,
-    width: '90%',
+    borderColor: '#1E293B',
+    borderRadius: 24,
+    paddingVertical: 32,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    shadowColor: '#38BDF8',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 20,
+    elevation: 6,
+  },
+  clockHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginBottom: 12,
+  },
+  clockLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+    letterSpacing: 1.2,
+  },
+  liveBadge: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    borderWidth: 1,
+    borderColor: '#10B981',
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+  },
+  liveBadgeText: {
+    color: '#10B981',
+    fontSize: 10,
+    fontWeight: '800',
   },
   timeText: {
-    fontSize: 48,
-    fontWeight: '700',
-    color: '#1b1c1c',
+    fontSize: 52,
+    fontWeight: '800',
+    color: '#F8FAFC',
+    letterSpacing: -1,
     fontVariant: ['tabular-nums'],
+    marginVertical: 4,
+  },
+  dateRow: {
+    marginTop: 8,
   },
   dateText: {
-    fontSize: 18,
-    color: '#44474c',
-    marginTop: 8,
+    fontSize: 16,
+    color: '#38BDF8',
+    fontWeight: '600',
   },
   actionContainer: {
     width: '100%',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   primaryButton: {
-    backgroundColor: '#041627',
-    paddingVertical: 20,
-    paddingHorizontal: 32,
-    borderRadius: 8,
-    width: '90%',
+    backgroundColor: '#2563EB',
+    paddingVertical: 18,
+    paddingHorizontal: 28,
+    borderRadius: 16,
+    width: '92%',
     alignItems: 'center',
-    shadowColor: '#041627',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowColor: '#2563EB',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 8,
   },
   primaryButtonText: {
-    color: '#ffffff',
-    fontSize: 20,
-    fontWeight: '600',
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  secondaryButton: {
+    marginTop: 12,
+    backgroundColor: '#0F172A',
+    borderWidth: 1,
+    borderColor: '#8B5CF6',
+    paddingVertical: 15,
+    paddingHorizontal: 24,
+    borderRadius: 16,
+    width: '92%',
+    alignItems: 'center',
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  secondaryButtonText: {
+    color: '#C084FC',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  instructionBadge: {
+    marginTop: 16,
+    backgroundColor: '#0F172A',
+    borderWidth: 1,
+    borderColor: '#1E293B',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
   },
   instructionText: {
-    marginTop: 16,
-    fontSize: 14,
-    color: '#74777d',
+    fontSize: 13,
+    color: '#94A3B8',
     textAlign: 'center',
+    fontWeight: '500',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    backgroundColor: 'rgba(9, 13, 22, 0.85)',
     justifyContent: 'flex-end',
   },
   modalContainer: {
-    backgroundColor: '#ffffff',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    backgroundColor: '#0F172A',
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    borderTopWidth: 1,
+    borderColor: '#1E293B',
     padding: 24,
-    height: '75%',
+    height: '80%',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -10 },
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
-    elevation: 10,
+    shadowOffset: { width: 0, height: -12 },
+    shadowOpacity: 0.4,
+    shadowRadius: 24,
+    elevation: 16,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -311,81 +442,80 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   modalTitle: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '800',
-    color: '#0f172a',
+    color: '#F8FAFC',
   },
   modalSubTitle: {
     fontSize: 13,
-    color: '#64748b',
-    marginTop: 2,
+    color: '#94A3B8',
+    marginTop: 3,
   },
   closeButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#f1f5f9',
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#1E293B',
     alignItems: 'center',
     justifyContent: 'center',
   },
   closeButtonText: {
     fontSize: 16,
-    color: '#475569',
+    color: '#94A3B8',
     fontWeight: '700',
   },
   searchInput: {
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#1E293B',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-    paddingHorizontal: 16,
+    borderColor: '#334155',
+    paddingHorizontal: 18,
     paddingVertical: 14,
-    borderRadius: 14,
+    borderRadius: 16,
     fontSize: 15,
     marginBottom: 18,
-    color: '#0f172a',
+    color: '#F8FAFC',
     fontWeight: '500',
   },
   employeeCard: {
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    backgroundColor: '#ffffff',
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+    backgroundColor: '#1E293B',
     borderWidth: 1,
-    borderColor: '#f1f5f9',
-    borderRadius: 16,
-    marginBottom: 10,
+    borderColor: '#334155',
+    borderRadius: 18,
+    marginBottom: 12,
     flexDirection: 'row',
     alignItems: 'center',
   },
   employeeCardWorking: {
-    borderColor: '#86efac',
-    backgroundColor: '#f0fdf4',
+    borderColor: '#10B981',
+    backgroundColor: 'rgba(16, 185, 129, 0.08)',
   },
   avatarCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#7c3aed',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 14,
   },
   avatarText: {
-    color: '#ffffff',
-    fontWeight: '700',
-    fontSize: 16,
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 17,
   },
   employeeInfo: {
     flex: 1,
   },
   employeeNameText: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '700',
-    color: '#0f172a',
+    color: '#F8FAFC',
   },
   employeeRoleText: {
     fontSize: 13,
-    color: '#64748b',
-    marginTop: 2,
+    color: '#94A3B8',
+    marginTop: 3,
   },
   statusBadge: {
     paddingVertical: 6,
@@ -393,32 +523,32 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   statusWorking: {
-    backgroundColor: '#dcfce7',
+    backgroundColor: 'rgba(16, 185, 129, 0.2)',
     borderWidth: 1,
-    borderColor: '#4ade80',
+    borderColor: '#10B981',
   },
   statusWorkingText: {
-    color: '#15803d',
+    color: '#34D399',
     fontWeight: '700',
     fontSize: 12,
   },
   statusBreak: {
-    backgroundColor: '#ffedd5',
+    backgroundColor: 'rgba(245, 158, 11, 0.2)',
     borderWidth: 1,
-    borderColor: '#fb923c',
+    borderColor: '#F59E0B',
   },
   statusBreakText: {
-    color: '#c2410c',
+    color: '#FBBF24',
     fontWeight: '700',
     fontSize: 12,
   },
   statusOffDuty: {
-    backgroundColor: '#f1f5f9',
+    backgroundColor: 'rgba(100, 116, 139, 0.2)',
     borderWidth: 1,
-    borderColor: '#cbd5e1',
+    borderColor: '#475569',
   },
   statusOffDutyText: {
-    color: '#64748b',
+    color: '#94A3B8',
     fontWeight: '600',
     fontSize: 12,
   },
@@ -426,43 +556,24 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   emptyContainer: {
-    paddingVertical: 40,
+    paddingVertical: 50,
     alignItems: 'center',
   },
   emptyText: {
-    color: '#94a3b8',
-    fontSize: 14,
+    color: '#64748B',
+    fontSize: 15,
     fontWeight: '500',
   },
-  addEmployeeHomeButton: {
-    marginTop: 12,
-    backgroundColor: '#7c3aed',
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    width: '90%',
-    alignItems: 'center',
-    shadowColor: '#7c3aed',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  addEmployeeHomeButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '700',
-  },
   addNewInlineBtn: {
-    backgroundColor: '#f3e8ff',
+    backgroundColor: 'rgba(139, 92, 246, 0.2)',
     borderWidth: 1,
-    borderColor: '#d8b4fe',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    borderColor: '#8B5CF6',
+    paddingVertical: 7,
+    paddingHorizontal: 14,
     borderRadius: 20,
   },
   addNewInlineBtnText: {
-    color: '#7c3aed',
+    color: '#C084FC',
     fontWeight: '700',
     fontSize: 12,
   },
