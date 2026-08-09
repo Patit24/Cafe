@@ -283,13 +283,37 @@ export default function CameraScreen() {
     }
   }, [status, loadingEmployee, performFaceMatching, triggerFastCapture]);
 
-  // Manual Photo Check-In Override
+  // Manual Live Photo Capture & Check-In
   const handleManualPhotoCheckIn = async () => {
     setSubmittingAttendance(true);
     try {
-      const shot = await triggerFastCapture();
-      const finalPhoto = shot || employee?.faces?.[0]?.imageUrl || 'https://via.placeholder.com/150';
-      
+      // Force fresh high-quality live photo capture from camera stream
+      let freshPhoto: string | null = null;
+
+      if (Platform.OS === 'web') {
+        if (webcamRef.current) {
+          freshPhoto = webcamRef.current.getScreenshot();
+        }
+      } else {
+        if (cameraViewRef.current) {
+          const photo = await cameraViewRef.current.takePictureAsync({
+            quality: 0.7,
+            base64: true,
+          });
+          if (photo?.base64) {
+            freshPhoto = `data:image/jpeg;base64,${photo.base64}`;
+          } else if (photo?.uri) {
+            freshPhoto = photo.uri;
+          }
+        }
+      }
+
+      if (!freshPhoto) {
+        freshPhoto = await triggerFastCapture();
+      }
+
+      const finalPhoto = freshPhoto || capturedLiveFrame || employee?.faces?.[0]?.imageUrl || 'https://via.placeholder.com/150';
+
       const payload = {
         employeeId: employeeId || employee?.id,
         deviceId: 'Kiosk-Device-EL90',
@@ -315,12 +339,14 @@ export default function CameraScreen() {
         params: {
           employeeId: employeeId || employee?.id,
           employeeName: employee?.name || 'Kitchen Staff',
-          score: 'Manual Photo Override',
+          score: 'Manual Photo Punch-In',
         },
       });
     } catch (err) {
-      console.error('Manual check-in error:', err);
-      alert('Network error submitting attendance. Please try again.');
+      console.error('Manual photo check-in error:', err);
+      if (Platform.OS === 'web') {
+        alert('Network error submitting manual photo attendance. Please try again.');
+      }
     } finally {
       setSubmittingAttendance(false);
     }
