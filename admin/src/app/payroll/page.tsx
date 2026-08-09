@@ -78,6 +78,36 @@ export default function PayrollPage() {
     }
   };
 
+  // Helper to compute exact late minutes for any attendance record
+  const computeLateMinutes = (att: any, empShift?: any) => {
+    if (att.penaltyDeductionMinutes && !isNaN(Number(att.penaltyDeductionMinutes)) && Number(att.penaltyDeductionMinutes) > 0) {
+      return Number(att.penaltyDeductionMinutes);
+    }
+    if (!att.checkInTime) return 0;
+    const checkIn = new Date(att.checkInTime);
+    const checkInMins = checkIn.getHours() * 60 + checkIn.getMinutes();
+
+    let shiftStartMins = 480; // Default 08:00 AM
+    const shiftObj = att.shift || att.employee?.shift || empShift;
+    if (shiftObj && shiftObj.startTime) {
+      const shiftDate = new Date(shiftObj.startTime);
+      shiftStartMins = shiftDate.getHours() * 60 + shiftDate.getMinutes();
+    }
+
+    const diff = checkInMins - shiftStartMins;
+    return diff > 0 ? diff : 0;
+  };
+
+  // Helper to format late duration nicely
+  const formatLateDuration = (mins: number) => {
+    if (mins <= 0) return 'On Time';
+    const hrs = Math.floor(mins / 60);
+    const remMins = mins % 60;
+    if (hrs > 0 && remMins > 0) return `${hrs}h ${remMins}m`;
+    if (hrs > 0) return `${hrs}h`;
+    return `${remMins}m`;
+  };
+
   const openEmployeeProfile = (record: any, empName: string, empCode: string, baseVal: number, workHrs: number, netVal: number, penaltyVal: number, otHrs: number, empAtts: any[], daysWorkedCount: number) => {
     const monthlySalary = baseVal || 15000;
     const dailyRate = Math.round((monthlySalary / 30) * 100) / 100;
@@ -90,7 +120,7 @@ export default function PayrollPage() {
       const curDate = new Date(startDate);
       curDate.setDate(startDate.getDate() + i);
       const dateStr = curDate.toISOString().split('T')[0];
-      const displayDate = curDate.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+      const displayDate = curDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
 
       const dayAtts = empAtts.filter(a => {
         const attDateStr = a.date ? a.date.toString() : a.checkInTime ? a.checkInTime.toString() : '';
@@ -102,7 +132,6 @@ export default function PayrollPage() {
       let checkInDisplay = '-';
       let checkOutDisplay = '-';
       let isWorking = false;
-      let isCompleted = false;
 
       if (dayAtts.length > 0) {
         dayAtts.forEach((att: any, idx: number) => {
@@ -116,13 +145,9 @@ export default function PayrollPage() {
             isWorking = true;
             checkOutDisplay = 'Active In Progress';
           }
-          if (att.status === 'completed') {
-            isCompleted = true;
-          }
 
-          if (att.penaltyDeductionMinutes && !isNaN(att.penaltyDeductionMinutes)) {
-            dayPenaltyMins += Number(att.penaltyDeductionMinutes);
-          }
+          const lateMins = computeLateMinutes(att, record.employee?.shift);
+          dayPenaltyMins += lateMins;
 
           if (att.checkOutTime && att.checkInTime) {
             const ms = new Date(att.checkOutTime).getTime() - new Date(att.checkInTime).getTime();
@@ -170,211 +195,195 @@ export default function PayrollPage() {
       dailyRate,
       hourlyRate,
       workHrs,
-      netVal,
       penaltyVal,
+      netVal,
       daysWorkedCount,
       daysLedger,
-      periodStart: startDate.toLocaleDateString(),
+      periodStart: startDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
     });
   };
 
-  // KPIs
-  const kpis = useMemo(() => {
-    let totalBase = 0;
-    let totalEarned = 0;
-    let totalDeductions = 0;
+  // Filtered records
+  const filteredRecords = useMemo(() => {
+    return payrollRecords.filter((record) => {
+      const name = record.employee?.name || '';
+      const code = record.employee?.employeeCode || record.employeeId || '';
+      const matchesSearch = name.toLowerCase().includes(searchTerm.toLowerCase()) || code.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesStatus = filterStatus === 'all' || record.status === filterStatus || (filterStatus === 'pending' && record.status !== 'paid');
+      return matchesSearch && matchesStatus;
+    });
+  }, [payrollRecords, searchTerm, filterStatus]);
+
+  // Overall totals
+  const totals = useMemo(() => {
+    let totalGross = 0;
     let totalNet = 0;
+    let totalPenalties = 0;
     let paidCount = 0;
     let pendingCount = 0;
 
-    payrollRecords.forEach(r => {
-      const monthlySalary = Number(r.employee?.salaryRate || r.baseSalary || 0);
-      const workHrs = Number(r.totalWorkingHours || 0);
-      const ot = Number(r.overtimePay || 0);
-      const pen = Number(r.penaltyDeductions || 0);
+    payrollRecords.forEach((r) => {
+      const sal = Number(r.baseSalary || r.employee?.salaryRate || 15000);
+      const gross = sal + Number(r.overtimePay || 0);
 
-      const hourlyRate = (monthlySalary / 30) / 24;
-      const earned = Math.round(workHrs * hourlyRate + ot);
-      const net = Math.max(0, earned - pen);
+      const empAtts = attendances.filter(a => a.employeeId === r.employeeId);
+      let calcLateMins = 0;
+      empAtts.forEach(att => {
+        calcLateMins += computeLateMinutes(att, r.employee?.shift);
+      });
 
-      totalBase += monthlySalary;
-      totalEarned += earned;
-      totalDeductions += pen;
+      const hourlyRate = (sal / 30) / 24;
+      const calcPenVal = Math.round((calcLateMins / 60) * hourlyRate);
+      const pen = Math.max(Number(r.penaltyDeductions || 0), calcPenVal);
+
+      const net = r.status === 'paid' ? Number(r.netSalary || 0) : Math.max(0, gross - pen);
+
+      totalGross += gross;
+      totalPenalties += pen;
       totalNet += net;
 
       if (r.status === 'paid') paidCount++;
       else pendingCount++;
     });
 
-    return { totalBase, totalEarned, totalDeductions, totalNet, paidCount, pendingCount };
-  }, [payrollRecords]);
-
-  // Filtered records
-  const filteredRecords = useMemo(() => {
-    return payrollRecords.filter(r => {
-      const name = (r.employee?.name || '').toLowerCase();
-      const code = (r.employee?.employeeCode || r.employeeId || '').toLowerCase();
-      const matchesSearch = name.includes(searchTerm.toLowerCase()) || code.includes(searchTerm.toLowerCase());
-      
-      if (filterStatus === 'pending' && r.status === 'paid') return false;
-      if (filterStatus === 'paid' && r.status !== 'paid') return false;
-      return matchesSearch;
-    });
-  }, [payrollRecords, searchTerm, filterStatus]);
+    return { totalGross, totalNet, totalPenalties, paidCount, pendingCount };
+  }, [payrollRecords, attendances]);
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100 p-6 sm:p-8 lg:p-10 font-sans">
-      {/* Top Header Navigation */}
-      <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8 border-b border-slate-800 pb-6">
+    <div className="p-3.5 sm:p-6 lg:p-8 bg-slate-900 text-slate-100 min-h-screen pb-24">
+      {/* ── Header Bar ── */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 sm:mb-8 pb-4 border-b border-slate-800">
         <div>
-          <Link href="/" className="inline-flex items-center gap-2 text-indigo-400 hover:text-indigo-300 text-xs font-semibold uppercase tracking-wider mb-3 px-3 py-1 bg-slate-800/80 rounded-full border border-slate-700/60 transition-all">
-            <span>←</span> Back to Dashboard
-          </Link>
-          <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-white flex items-center gap-3">
-            <span>Payroll &amp; Financial Ledger</span>
-            <span className="text-xs bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 font-black px-2.5 py-1 rounded-md uppercase tracking-wider shadow-sm">
-              Current Cycle
-            </span>
+          <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-white tracking-tight flex items-center gap-2.5">
+            <span className="text-2xl sm:text-3xl">💰</span>
+            <span>Monthly Staff Payroll Ledger</span>
           </h1>
-          <p className="text-sm text-slate-400 mt-1.5 font-medium max-w-2xl">
-            Review employee working hours, calculated earnings, automated late arrival deductions, and issue salary settlements.
+          <p className="text-slate-400 text-xs sm:text-sm mt-1">
+            Standard 30-Day Cycle • Formula: Base ÷ 30 Days = Daily ÷ 24 Hrs = Hourly Rate
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <button 
+
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
             onClick={handleGenerateAll}
             disabled={generating}
-            className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-5 py-2.5 rounded-xl text-sm shadow-lg shadow-indigo-600/20 hover:shadow-indigo-600/40 disabled:opacity-50 transition-all flex items-center gap-2.5 whitespace-nowrap active:scale-95 border border-indigo-400/20"
+            className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-4 py-2.5 rounded-xl text-xs shadow-lg shadow-indigo-600/25 transition-all flex items-center gap-2 disabled:opacity-50"
           >
-            <span className="text-lg">{generating ? '⌛' : '⚡'}</span>
-            <span>{generating ? 'Re-calculating...' : 'Re-calculate Payroll'}</span>
+            {generating ? (
+              <>
+                <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                <span>Calculating...</span>
+              </>
+            ) : (
+              <>
+                <span>⚡ Re-calculate Payroll</span>
+              </>
+            )}
           </button>
-          <button className="bg-slate-800 hover:bg-slate-750 text-slate-200 hover:text-white font-semibold px-5 py-2.5 rounded-xl text-sm border border-slate-700 transition-all whitespace-nowrap active:scale-95 shadow-xs">
-            📤 Export Report (.CSV)
-          </button>
-        </div>
-      </header>
 
-      {/* KPI Overview Summary Bar */}
-      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="bg-slate-800/90 border border-slate-700/70 rounded-2xl p-5 shadow-xl relative overflow-hidden backdrop-blur-md">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Base Salaries</span>
-            <span className="p-2 bg-indigo-500/10 text-indigo-400 rounded-lg text-lg">📁</span>
-          </div>
-          <p className="text-3xl font-black text-white mt-2">₹{kpis.totalBase.toLocaleString('en-IN')}</p>
-          <p className="text-xs text-slate-400 mt-1.5 flex items-center gap-1.5 font-medium">
-            <span>Across {payrollRecords.length} active staff members</span>
-          </p>
+          <Link
+            href="/"
+            className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold px-4 py-2.5 rounded-xl text-xs border border-slate-700 transition-all flex items-center gap-1.5"
+          >
+            <span>← Dashboard</span>
+          </Link>
         </div>
+      </div>
 
-        <div className="bg-slate-800/90 border border-slate-700/70 rounded-2xl p-5 shadow-xl relative overflow-hidden backdrop-blur-md">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">Work Amount (Earned)</span>
-            <span className="p-2 bg-emerald-500/10 text-emerald-400 rounded-lg text-lg">💰</span>
+      {/* ── Summary Stats Strip ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5 mb-6 sm:mb-8">
+        <div className="bg-slate-800/80 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-slate-700/70 shadow-lg relative overflow-hidden">
+          <div className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">Total Monthly Commitment</div>
+          <div className="text-xl sm:text-3xl font-black text-white mt-1">
+            ₹{totals.totalGross.toLocaleString('en-IN')}
           </div>
-          <p className="text-3xl font-black text-emerald-400 mt-2">₹{kpis.totalEarned.toLocaleString('en-IN')}</p>
-          <p className="text-xs text-slate-400 mt-1.5 flex items-center gap-1.5 font-medium">
-            <span>Computed from actual worked hours</span>
-          </p>
+          <div className="text-[11px] text-slate-400 mt-1 font-mono">Gross Before Deductions</div>
         </div>
 
-        <div className="bg-slate-800/90 border border-slate-700/70 rounded-2xl p-5 shadow-xl relative overflow-hidden backdrop-blur-md">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-rose-400">Late &amp; Penalty Deductions</span>
-            <span className="p-2 bg-rose-500/10 text-rose-400 rounded-lg text-lg">⚠️</span>
+        <div className="bg-slate-800/80 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-slate-700/70 shadow-lg relative overflow-hidden">
+          <div className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">Total Late Deductions</div>
+          <div className="text-xl sm:text-3xl font-black text-rose-400 mt-1">
+            -₹{totals.totalPenalties.toLocaleString('en-IN')}
           </div>
-          <p className="text-3xl font-black text-rose-400 mt-2">-₹{kpis.totalDeductions.toLocaleString('en-IN')}</p>
-          <p className="text-xs text-slate-400 mt-1.5 flex items-center gap-1.5 font-medium">
-            <span>Automated arrival deduction totals</span>
-          </p>
+          <div className="text-[11px] text-rose-300/80 mt-1 font-mono">Accumulated Penalty Deductions</div>
         </div>
 
-        <div className="bg-gradient-to-br from-indigo-900 via-slate-800 to-slate-900 border border-indigo-500/40 rounded-2xl p-5 shadow-xl relative overflow-hidden">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-extrabold uppercase tracking-wider text-indigo-300">Net Payable Salaries</span>
-            <span className="p-2 bg-indigo-400/20 text-indigo-300 rounded-lg text-lg">💎</span>
+        <div className="bg-slate-800/80 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-slate-700/70 shadow-lg relative overflow-hidden">
+          <div className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">Net Payable Outflow</div>
+          <div className="text-xl sm:text-3xl font-black text-emerald-400 mt-1">
+            ₹{totals.totalNet.toLocaleString('en-IN')}
           </div>
-          <p className="text-3xl font-black text-white mt-2">₹{kpis.totalNet.toLocaleString('en-IN')}</p>
-          <div className="flex items-center gap-3 text-xs mt-1.5 font-bold text-slate-300">
-            <span className="text-emerald-400">✓ {kpis.paidCount} Paid</span>
-            <span>•</span>
-            <span className="text-amber-400">⏳ {kpis.pendingCount} Pending</span>
-          </div>
+          <div className="text-[11px] text-emerald-300/80 mt-1 font-mono">Actual Amount To Disburse</div>
         </div>
-      </section>
 
-      {/* Filter and Search Action Bar */}
-      <section className="bg-slate-800/60 border border-slate-700/80 rounded-2xl p-4 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0">
+        <div className="bg-slate-800/80 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-slate-700/70 shadow-lg relative overflow-hidden">
+          <div className="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">Disbursement Status</div>
+          <div className="text-lg sm:text-2xl font-extrabold text-white mt-1 flex items-center gap-2">
+            <span className="text-emerald-400">{totals.paidCount} Paid</span>
+            <span className="text-slate-600">/</span>
+            <span className="text-amber-400">{totals.pendingCount} Pending</span>
+          </div>
+          <div className="text-[11px] text-slate-400 mt-1 font-mono">Out of {payrollRecords.length} Staff Ledgers</div>
+        </div>
+      </div>
+
+      {/* ── Filter & Search Bar ── */}
+      <div className="bg-slate-800/90 backdrop-blur-md p-4 rounded-2xl border border-slate-700/80 mb-6 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-md">
+        <div className="relative w-full sm:w-80">
+          <input
+            type="text"
+            placeholder="Search employee by name or ID..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 pl-10 text-xs font-medium text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-all"
+          />
+          <span className="absolute left-3.5 top-2.5 text-slate-500 text-sm">🔍</span>
+        </div>
+
+        <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
           <button
             onClick={() => setFilterStatus('all')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap ${
-              filterStatus === 'all'
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 border border-indigo-400/40'
-                : 'bg-slate-800 text-slate-400 hover:text-white border border-slate-700'
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+              filterStatus === 'all' ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-900 text-slate-400 border border-slate-700 hover:text-white'
             }`}
           >
             All Staff ({payrollRecords.length})
           </button>
           <button
             onClick={() => setFilterStatus('pending')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap ${
-              filterStatus === 'pending'
-                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-md'
-                : 'bg-slate-800 text-slate-400 hover:text-white border border-slate-700'
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+              filterStatus === 'pending' ? 'bg-amber-600 text-white shadow-md' : 'bg-slate-900 text-slate-400 border border-slate-700 hover:text-white'
             }`}
           >
-            ⏳ Pending Payment ({kpis.pendingCount})
+            Pending ({totals.pendingCount})
           </button>
           <button
             onClick={() => setFilterStatus('paid')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap ${
-              filterStatus === 'paid'
-                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-md'
-                : 'bg-slate-800 text-slate-400 hover:text-white border border-slate-700'
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+              filterStatus === 'paid' ? 'bg-emerald-600 text-white shadow-md' : 'bg-slate-900 text-slate-400 border border-slate-700 hover:text-white'
             }`}
           >
-            ✓ Paid &amp; Cleared ({kpis.paidCount})
+            Paid ({totals.paidCount})
           </button>
         </div>
+      </div>
 
-        <div className="relative flex-1 max-w-md">
-          <input
-            type="text"
-            placeholder="Search by Employee Name or ID..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all pl-10"
-          />
-          <span className="absolute left-3.5 top-2.5 text-slate-500 text-sm">🔍</span>
-          {searchTerm && (
-            <button
-              onClick={() => setSearchTerm('')}
-              className="absolute right-3 top-2 text-slate-500 hover:text-white text-sm font-bold"
-            >
-              ✕
-            </button>
-          )}
-        </div>
-      </section>
-
-      {/* Main Table Container */}
-      <section className="bg-slate-800/80 border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden mb-8">
-        {/* Desktop Table */}
+      {/* ── Main Payroll Table Container ── */}
+      <div className="bg-slate-800/90 backdrop-blur-md rounded-2xl border border-slate-700/80 shadow-2xl overflow-hidden">
+        {/* Desktop Table View */}
         <div className="hidden lg:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-900/90 text-[11px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-700/80">
-                <th className="py-4 px-6 whitespace-nowrap">Employee</th>
-                <th className="py-4 px-4 whitespace-nowrap">Cycle Period</th>
-                <th className="py-4 px-4 whitespace-nowrap">Duty &amp; Hours</th>
-                <th className="py-4 px-4 whitespace-nowrap">Earned Pay</th>
-                <th className="py-4 px-4 whitespace-nowrap">Base Salary</th>
-                <th className="py-4 px-4 whitespace-nowrap">Late Deductions</th>
-                <th className="py-4 px-4 whitespace-nowrap">Net Salary (INR)</th>
-                <th className="py-4 px-4 whitespace-nowrap">Status</th>
-                <th className="py-4 px-6 text-right whitespace-nowrap">Actions &amp; Ledger</th>
+            <thead className="bg-slate-950 text-slate-400 text-xs font-bold uppercase tracking-wider border-b border-slate-800">
+              <tr>
+                <th className="py-4 px-6">Employee</th>
+                <th className="py-4 px-4">Pay Period</th>
+                <th className="py-4 px-4">Hours &amp; Days</th>
+                <th className="py-4 px-4">Earned Salary</th>
+                <th className="py-4 px-4">Base Rate</th>
+                <th className="py-4 px-4">LATE DEDUCTIONS</th>
+                <th className="py-4 px-4">Net Salary</th>
+                <th className="py-4 px-4">Payment Status</th>
+                <th className="py-4 px-6 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-700/60 text-sm">
@@ -408,7 +417,21 @@ export default function PayrollPage() {
                   const otPay = Number(record.overtimePay || 0);
 
                   const empAtts = attendances.filter(a => a.employeeId === record.employeeId);
-                  const totalPenaltyMins = empAtts.reduce((sum, a) => sum + (Number((a as any).penaltyDeductionMinutes || (a as any).penaltyMinutes) || 0), 0);
+                  
+                  // Compute exact total late minutes for this employee across all attendance entries
+                  let calcLateMins = 0;
+                  empAtts.forEach(att => {
+                    calcLateMins += computeLateMinutes(att, record.employee?.shift);
+                  });
+
+                  const totalLateMins = Math.max(
+                    empAtts.reduce((sum, a) => sum + (Number((a as any).penaltyDeductionMinutes || (a as any).penaltyMinutes) || 0), 0),
+                    calcLateMins
+                  );
+
+                  const calcPenaltyVal = Math.round((totalLateMins / 60) * hourlyRate);
+                  const finalPenaltyVal = Math.max(penaltyVal, calcPenaltyVal);
+
                   const uniqueDays = new Set(empAtts.map(a => {
                     const dateStr = a.date ? a.date.toString() : a.checkInTime ? a.checkInTime.toString() : '';
                     return dateStr.split('T')[0];
@@ -435,7 +458,7 @@ export default function PayrollPage() {
                   }
 
                   const workAmount = Math.round(workHrs * hourlyRate + otPay);
-                  const netVal = record.status === 'paid' ? Number(record.netSalary || 0) : Math.max(0, Math.round(workAmount - penaltyVal));
+                  const netVal = record.status === 'paid' ? Number(record.netSalary || 0) : Math.max(0, Math.round(workAmount - finalPenaltyVal));
                   const initials = empName.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase();
 
                   return (
@@ -489,20 +512,26 @@ export default function PayrollPage() {
                       <td className="py-4 px-4 whitespace-nowrap font-semibold text-slate-300">
                         ₹{baseVal.toLocaleString('en-IN')}
                       </td>
+
+                      {/* ── LATE DEDUCTIONS COLUMN (LATE HOURS & LATE DEDUCTED PRICE) ── */}
                       <td className="py-4 px-4 whitespace-nowrap">
-                        {penaltyVal > 0 || totalPenaltyMins > 0 ? (
-                          <div className="inline-flex flex-col items-start bg-rose-500/10 border border-rose-500/30 px-2.5 py-1 rounded-lg">
-                            <span className="text-rose-400 font-bold text-sm">-₹{penaltyVal.toLocaleString('en-IN')}</span>
-                            <span className="text-[10px] text-rose-300/90 font-black uppercase tracking-wide">
-                              ⚠️ {totalPenaltyMins}m Late Entry
+                        {totalLateMins > 0 || finalPenaltyVal > 0 ? (
+                          <div className="inline-flex flex-col items-start bg-rose-500/15 border border-rose-500/30 px-3 py-1.5 rounded-xl shadow-xs">
+                            <span className="text-rose-400 font-black text-sm font-mono">
+                              -₹{finalPenaltyVal.toLocaleString('en-IN')}
+                            </span>
+                            <span className="text-[10px] text-rose-300 font-extrabold tracking-wide mt-0.5 flex items-center gap-1">
+                              ⚠️ {formatLateDuration(totalLateMins)} Late
                             </span>
                           </div>
                         ) : (
-                          <span className="text-slate-400 bg-slate-900/60 px-2.5 py-1 rounded-lg border border-slate-700/50 text-xs font-medium">
-                            ₹0 (No Deductions)
+                          <span className="text-slate-400 bg-slate-900/60 px-3 py-1.5 rounded-xl border border-slate-700/50 text-xs font-semibold inline-flex items-center gap-1">
+                            <span>✓ ₹0</span>
+                            <span className="text-slate-500 text-[10px]">(On Time)</span>
                           </span>
                         )}
                       </td>
+
                       <td className="py-4 px-4 whitespace-nowrap">
                         <div className="font-black text-white text-lg tracking-tight bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-700 inline-block shadow-sm">
                           ₹{netVal.toLocaleString('en-IN')}
@@ -521,31 +550,29 @@ export default function PayrollPage() {
                           </span>
                         )}
                       </td>
-                      <td className="py-4 px-6 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-2">
+                      <td className="py-4 px-6 whitespace-nowrap text-right space-x-2">
+                        <button
+                          onClick={() => openEmployeeProfile(record, empName, empCode, baseVal, workHrs, netVal, finalPenaltyVal, otHrs, empAtts, daysWorkedCount)}
+                          className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-xl text-xs font-bold border border-slate-700 hover:border-slate-600 transition-all inline-flex items-center gap-1.5 shadow-xs"
+                        >
+                          <span>📊 Detailed Ledger</span>
+                        </button>
+
+                        {record.status !== 'paid' ? (
                           <button
-                            onClick={() => openEmployeeProfile(record, empName, empCode, baseVal, workHrs, netVal, penaltyVal, otHrs, empAtts, daysWorkedCount)}
-                            className="bg-slate-700 hover:bg-slate-600 text-slate-200 hover:text-white px-3 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 border border-slate-600 inline-flex items-center gap-1.5 shadow-sm whitespace-nowrap"
+                            onClick={() => handleMarkAsPaid(record.id)}
+                            className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all inline-flex items-center gap-1 shadow-md shadow-emerald-600/20"
                           >
-                            <span>📊 Ledger</span>
+                            <span>✓ Mark Paid</span>
                           </button>
-                          {record.status !== 'paid' ? (
-                            <button 
-                              onClick={() => handleMarkAsPaid(record.id)}
-                              className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white px-3.5 py-2 rounded-xl text-xs font-bold shadow-lg shadow-emerald-600/20 active:scale-95 transition-all inline-flex items-center gap-1.5 whitespace-nowrap border border-emerald-400/20"
-                            >
-                              <span>✓ Release Pay</span>
-                            </button>
-                          ) : (
-                            <button 
-                              onClick={() => handleRevertStatus(record.id)}
-                              className="bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 border border-slate-700 hover:border-rose-500/40 px-2.5 py-2 rounded-xl text-xs font-medium transition-all"
-                              title="Revert to Pending Payment"
-                            >
-                              Revert
-                            </button>
-                          )}
-                        </div>
+                        ) : (
+                          <button
+                            onClick={() => handleRevertStatus(record.id)}
+                            className="bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 border border-slate-700 hover:border-rose-500/40 px-3 py-1.5 rounded-xl text-xs font-medium transition-all"
+                          >
+                            Revert
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );
@@ -555,19 +582,12 @@ export default function PayrollPage() {
           </table>
         </div>
 
-        {/* Mobile Card View */}
-        <div className="lg:hidden p-4 space-y-4">
+        {/* Mobile View Cards (< lg) */}
+        <div className="lg:hidden divide-y divide-slate-800 p-4 space-y-4">
           {loading ? (
-            <div className="p-12 text-center text-slate-400 font-medium animate-pulse">
-              <div className="flex flex-col items-center justify-center gap-3">
-                <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-                <span>Loading payroll calculations...</span>
-              </div>
-            </div>
+            <div className="p-8 text-center text-slate-400 animate-pulse">Loading payroll records...</div>
           ) : filteredRecords.length === 0 ? (
-            <div className="p-8 text-center text-slate-400">
-              <p className="text-sm font-semibold">No employee records match your current criteria.</p>
-            </div>
+            <div className="p-8 text-center text-slate-400">No payroll records found.</div>
           ) : (
             filteredRecords.map((record) => {
               const empName = record.employee?.name || 'Unnamed Employee';
@@ -582,7 +602,20 @@ export default function PayrollPage() {
               const otPay = Number(record.overtimePay || 0);
 
               const empAtts = attendances.filter(a => a.employeeId === record.employeeId);
-              const totalPenaltyMins = empAtts.reduce((sum, a) => sum + (Number((a as any).penaltyDeductionMinutes || (a as any).penaltyMinutes) || 0), 0);
+
+              let calcLateMins = 0;
+              empAtts.forEach(att => {
+                calcLateMins += computeLateMinutes(att, record.employee?.shift);
+              });
+
+              const totalLateMins = Math.max(
+                empAtts.reduce((sum, a) => sum + (Number((a as any).penaltyDeductionMinutes || (a as any).penaltyMinutes) || 0), 0),
+                calcLateMins
+              );
+
+              const calcPenaltyVal = Math.round((totalLateMins / 60) * hourlyRate);
+              const finalPenaltyVal = Math.max(penaltyVal, calcPenaltyVal);
+
               const uniqueDays = new Set(empAtts.map(a => {
                 const dateStr = a.date ? a.date.toString() : a.checkInTime ? a.checkInTime.toString() : '';
                 return dateStr.split('T')[0];
@@ -609,7 +642,7 @@ export default function PayrollPage() {
               }
 
               const workAmount = Math.round(workHrs * hourlyRate + otPay);
-              const netVal = record.status === 'paid' ? Number(record.netSalary || 0) : Math.max(0, Math.round(workAmount - penaltyVal));
+              const netVal = record.status === 'paid' ? Number(record.netSalary || 0) : Math.max(0, Math.round(workAmount - finalPenaltyVal));
               const initials = empName.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase();
 
               return (
@@ -624,6 +657,7 @@ export default function PayrollPage() {
                         <p className="text-xs text-slate-400 font-mono">ID: {empCode}</p>
                       </div>
                     </div>
+
                     {record.status === 'paid' ? (
                       <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2.5 py-1 rounded-full text-[11px] font-bold">
                         Paid
@@ -646,9 +680,9 @@ export default function PayrollPage() {
                       <span className="font-extrabold text-slate-200 text-sm">₹{baseVal.toLocaleString()}</span>
                     </div>
                     <div className="bg-slate-800/70 p-2.5 rounded-xl border border-slate-700/50 text-center">
-                      <span className="text-slate-400 block text-[10px] font-bold uppercase">Deductions</span>
-                      <span className="font-extrabold text-rose-400 text-sm">-₹{penaltyVal.toLocaleString()}</span>
-                      {totalPenaltyMins > 0 && <span className="text-[10px] text-rose-300 block">{totalPenaltyMins}m late</span>}
+                      <span className="text-slate-400 block text-[10px] font-bold uppercase">Late Deductions</span>
+                      <span className="font-extrabold text-rose-400 text-sm">-₹{finalPenaltyVal.toLocaleString()}</span>
+                      {totalLateMins > 0 && <span className="text-[10px] text-rose-300 block">⚠️ {formatLateDuration(totalLateMins)} late</span>}
                     </div>
                     <div className="bg-slate-800/70 p-2.5 rounded-xl border border-slate-700/50 text-center bg-gradient-to-br from-indigo-950/50 to-slate-800">
                       <span className="text-indigo-300 block text-[10px] font-bold uppercase">Net Pay</span>
@@ -658,7 +692,7 @@ export default function PayrollPage() {
 
                   <div className="flex items-center justify-between gap-2 pt-1">
                     <button
-                      onClick={() => openEmployeeProfile(record, empName, empCode, baseVal, workHrs, netVal, penaltyVal, otHrs, empAtts, daysWorkedCount)}
+                      onClick={() => openEmployeeProfile(record, empName, empCode, baseVal, workHrs, netVal, finalPenaltyVal, otHrs, empAtts, daysWorkedCount)}
                       className="flex-1 bg-slate-800 hover:bg-slate-750 text-slate-200 py-2.5 rounded-xl text-xs font-bold border border-slate-700 transition-all flex items-center justify-center gap-1.5 shadow-xs"
                     >
                       <span>📊 Ledger</span>
@@ -684,20 +718,20 @@ export default function PayrollPage() {
             })
           )}
         </div>
-      </section>
+      </div>
 
-      {/* 30-Day Day-by-Day Employee Ledger Modal */}
+      {/* ── EMPLOYEE PROFILE & 30-DAY LEDGER MODAL ── */}
       {selectedEmployee && (
-        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-slate-900 rounded-2xl border border-slate-700 shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden text-slate-100">
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-700/80 rounded-3xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden my-auto">
             {/* Modal Header */}
-            <div className="p-6 border-b border-slate-800 flex justify-between items-start bg-slate-950/80">
+            <div className="p-6 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <div className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white font-extrabold text-xl w-14 h-14 rounded-2xl flex items-center justify-center shadow-xl shadow-indigo-600/20">
-                  {selectedEmployee.empName.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()}
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white font-black text-lg flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                  {selectedEmployee.empName.substring(0, 2).toUpperCase()}
                 </div>
                 <div>
-                  <h2 className="text-2xl font-extrabold text-white flex items-center gap-2.5">
+                  <h2 className="text-xl sm:text-2xl font-extrabold text-white flex items-center gap-2.5">
                     <span>{selectedEmployee.empName}</span>
                     <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-xs px-3 py-1 rounded-full font-bold">
                       ● Active Staff
@@ -710,7 +744,7 @@ export default function PayrollPage() {
               </div>
               <button 
                 onClick={() => setSelectedEmployee(null)}
-                className="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-750 p-2.5 rounded-xl border border-slate-700 transition-all text-sm font-bold"
+                className="text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-750 px-3.5 py-2 rounded-xl border border-slate-700 transition-all text-xs font-bold"
               >
                 ✕ Close
               </button>
@@ -743,7 +777,7 @@ export default function PayrollPage() {
                 <p className="text-2xl font-black text-indigo-400 mt-1">{selectedEmployee.workHrs.toFixed(1)} hrs</p>
               </div>
               <div className="bg-slate-800/80 p-4 rounded-xl border border-slate-700/80">
-                <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Late Penalties</p>
+                <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Late Deductions</p>
                 <p className="text-2xl font-black text-rose-400 mt-1">-₹{selectedEmployee.penaltyVal.toLocaleString('en-IN')}</p>
               </div>
               <div className="bg-gradient-to-r from-emerald-900/60 to-slate-800 p-4 rounded-xl border border-emerald-500/30">
@@ -761,7 +795,7 @@ export default function PayrollPage() {
                 <span className="text-xs text-slate-400 font-medium">Complete daily breakdown</span>
               </div>
               <div className="space-y-3">
-                {/* Desktop/Tablet Table View */}
+                {/* Desktop Table View */}
                 <div className="hidden md:block border border-slate-700/80 rounded-xl overflow-x-auto">
                   <table className="w-full text-left border-collapse text-sm">
                     <thead className="bg-slate-950 text-slate-400 text-xs font-bold uppercase sticky top-0 shadow-md border-b border-slate-800">
@@ -772,7 +806,7 @@ export default function PayrollPage() {
                         <th className="p-3.5 whitespace-nowrap">In → Out</th>
                         <th className="p-3.5 whitespace-nowrap">Hours</th>
                         <th className="p-3.5 whitespace-nowrap">Rate</th>
-                        <th className="p-3.5 whitespace-nowrap">Late Penalty</th>
+                        <th className="p-3.5 whitespace-nowrap">Late Deduction</th>
                         <th className="p-3.5 text-right whitespace-nowrap">Earned Pay</th>
                       </tr>
                     </thead>
@@ -801,12 +835,12 @@ export default function PayrollPage() {
                               ₹{selectedEmployee.hourlyRate}/h
                             </td>
                             <td className="p-3.5 whitespace-nowrap">
-                              {day.penaltyMoney > 0 ? (
-                                <span className="text-rose-400 font-bold bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20 text-xs">
-                                  -₹{day.penaltyMoney} ({day.dayPenaltyMins}m late)
+                              {day.dayPenaltyMins > 0 || day.penaltyMoney > 0 ? (
+                                <span className="text-rose-400 font-bold bg-rose-500/10 px-2.5 py-1 rounded-lg border border-rose-500/20 text-xs inline-flex items-center gap-1">
+                                  -₹{day.penaltyMoney} (⚠️ {formatLateDuration(day.dayPenaltyMins)} late)
                                 </span>
                               ) : (
-                                <span className="text-slate-600 text-xs">None</span>
+                                <span className="text-slate-500 text-xs font-medium">✓ On Time</span>
                               )}
                             </td>
                             <td className="p-3.5 text-right font-black text-emerald-400 text-sm font-mono whitespace-nowrap">
@@ -847,19 +881,19 @@ export default function PayrollPage() {
                             <span className="text-[9px] text-slate-400 block truncate">{day.checkInDisplay !== '-' ? `${day.checkInDisplay} → ${day.checkOutDisplay}` : '—'}</span>
                           </div>
                           <div className="bg-slate-900/50 p-2 rounded-lg text-center border border-slate-800/60">
-                            <span className="text-slate-400 block text-[9px] uppercase font-bold">Late Penalty</span>
-                            {day.penaltyMoney > 0 ? (
+                            <span className="text-slate-400 block text-[9px] uppercase font-bold">Late Deduction</span>
+                            {day.dayPenaltyMins > 0 || day.penaltyMoney > 0 ? (
                               <>
                                 <span className="font-bold text-rose-400 text-xs">-₹{day.penaltyMoney}</span>
-                                <span className="text-[9px] text-rose-300/80 block">{day.dayPenaltyMins}m late</span>
+                                <span className="text-[9px] text-rose-300/80 block">⚠️ {formatLateDuration(day.dayPenaltyMins)} late</span>
                               </>
                             ) : (
-                              <span className="font-medium text-slate-500 text-xs block mt-1">₹0 (On time)</span>
+                              <span className="font-medium text-emerald-400 text-xs block mt-1">✓ On Time</span>
                             )}
                           </div>
                           <div className="bg-gradient-to-br from-indigo-950/40 to-slate-900/80 p-2 rounded-lg text-center border border-slate-800/80">
                             <span className="text-indigo-300 block text-[9px] uppercase font-bold">Earned Pay</span>
-                            <span className="font-black text-emerald-400 text-sm block mt-0.5">₹{day.netMoney.toLocaleString('en-IN')}</span>
+                            <span className="font-extrabold text-emerald-400 text-xs mt-1 block">₹{day.netMoney.toLocaleString('en-IN')}</span>
                           </div>
                         </div>
                       </div>
@@ -867,16 +901,6 @@ export default function PayrollPage() {
                   })}
                 </div>
               </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="p-4 border-t border-slate-800 bg-slate-950 flex justify-end">
-              <button
-                onClick={() => setSelectedEmployee(null)}
-                className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-6 py-2.5 rounded-xl shadow-md transition-all text-sm active:scale-95"
-              >
-                Close Ledger
-              </button>
             </div>
           </div>
         </div>
