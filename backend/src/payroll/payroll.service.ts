@@ -63,22 +63,26 @@ export class PayrollService {
     const overtimeRateNum = Number(employee.overtimeRate || 0);
 
     if (employee.salaryType === 'hourly') {
-      baseSalary = totalWorkingHours * salaryRateNum;
-      overtimePay = totalOvertimeHours * overtimeRateNum;
-      penaltyDeductions = (totalPenaltyMinutes / 60) * salaryRateNum;
+      const hourlyRate = salaryRateNum > 0 ? salaryRateNum : 100;
+      baseSalary = totalWorkingHours * hourlyRate;
+      overtimePay = totalOvertimeHours * (overtimeRateNum || hourlyRate * 1.5);
+      penaltyDeductions = (totalPenaltyMinutes / 60) * hourlyRate;
     } else if (employee.salaryType === 'daily') {
-      const daysWorked = attendances.length || 1;
-      baseSalary = daysWorked * salaryRateNum;
-      overtimePay = totalOvertimeHours * overtimeRateNum;
-      const hourlyEquivalent = salaryRateNum / 24;
-      penaltyDeductions = (totalPenaltyMinutes / 60) * hourlyEquivalent;
+      const dailyRate = salaryRateNum > 0 ? salaryRateNum : 500;
+      const hourlyRate = dailyRate / 9; // Standard 9-hour shift
+      const daysWorked = attendances.length || (totalWorkingHours > 0 ? 1 : 0);
+      baseSalary = daysWorked * dailyRate;
+      overtimePay = totalOvertimeHours * (overtimeRateNum || hourlyRate * 1.5);
+      penaltyDeductions = (totalPenaltyMinutes / 60) * hourlyRate;
     } else {
-      // Monthly salary: calculate accumulated earned pay based on actual hours worked so far this month
-      const dailyRate = salaryRateNum / 30;
-      const hourlyEquivalent = dailyRate / 24;
-      baseSalary = totalWorkingHours * hourlyEquivalent;
-      overtimePay = totalOvertimeHours * overtimeRateNum;
-      penaltyDeductions = (totalPenaltyMinutes / 60) * hourlyEquivalent;
+      // Monthly fixed salary (e.g. ₹120,000, ₹30,000, ₹20,000, ₹15,000)
+      const monthlySalary = salaryRateNum > 0 ? salaryRateNum : 15000;
+      const dailyRate = monthlySalary / 30;
+      const hourlyRate = dailyRate / 9; // Standard 9-hour shift
+
+      baseSalary = monthlySalary;
+      overtimePay = totalOvertimeHours * (overtimeRateNum || hourlyRate * 1.5);
+      penaltyDeductions = (totalPenaltyMinutes / 60) * hourlyRate;
     }
 
     // Round to 2 decimal places
@@ -92,7 +96,6 @@ export class PayrollService {
     const existingEntry = await this.prisma.payrollEntry.findFirst({
       where: {
         employeeId,
-        status: 'generated',
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -167,35 +170,41 @@ export class PayrollService {
     const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
-    // Only do full auto-recalculation once every 5 minutes, OR if an employee has zero records
-    const shouldFullRecalc = (Date.now() - this.lastAutoRecalc) > 300000;
-
-    if (shouldFullRecalc) {
-      const activeEmployees = await this.prisma.employee.findMany({
-        where: { isActive: true },
+    const activeEmployees = await this.prisma.employee.findMany({
+      where: { isActive: true },
+    });
+    for (const emp of activeEmployees) {
+      const existing = await this.prisma.payrollEntry.findFirst({
+        where: { employeeId: emp.id },
       });
-      for (const emp of activeEmployees) {
-        const existing = await this.prisma.payrollEntry.findFirst({
-          where: { employeeId: emp.id },
-        });
-        if (!existing) {
-          try {
-            await this.generatePayroll(emp.id, firstDayOfMonth, lastDayOfMonth);
-          } catch (err) {
-            console.error(`Failed to auto-generate payroll for ${emp.id}`, err);
-          }
+      if (!existing) {
+        try {
+          await this.generatePayroll(emp.id, firstDayOfMonth, lastDayOfMonth);
+        } catch (err) {
+          console.error(`Failed to auto-generate payroll for ${emp.id}`, err);
         }
       }
-      this.lastAutoRecalc = Date.now();
     }
 
     const results = await this.prisma.payrollEntry.findMany({
       include: { employee: true },
       orderBy: { createdAt: 'desc' },
     });
-    this.cacheData = results;
+
+    // Deduplicate results by employeeId to return 1 active record per employee
+    const seen = new Set<string>();
+    const deduplicatedResults: any[] = [];
+    results.forEach((rec) => {
+      const empId = rec.employeeId || rec.employee?.id;
+      if (empId && !seen.has(empId)) {
+        seen.add(empId);
+        deduplicatedResults.push(rec);
+      }
+    });
+
+    this.cacheData = deduplicatedResults;
     this.cacheTimestamp = Date.now();
-    return results;
+    return deduplicatedResults;
   }
 
   findOne(id: string) {

@@ -111,7 +111,7 @@ export default function PayrollPage() {
   const openEmployeeProfile = (record: any, empName: string, empCode: string, baseVal: number, workHrs: number, netVal: number, penaltyVal: number, otHrs: number, empAtts: any[], daysWorkedCount: number) => {
     const monthlySalary = baseVal || 15000;
     const dailyRate = Math.round((monthlySalary / 30) * 100) / 100;
-    const hourlyRate = Math.round((dailyRate / 24) * 100) / 100;
+    const hourlyRate = Math.round((dailyRate / 9) * 100) / 100;
 
     const startDate = record.periodStart ? new Date(record.periodStart) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
     
@@ -163,7 +163,7 @@ export default function PayrollPage() {
 
       const dayHours = Math.round((dayMinutes / 60) * 100) / 100;
       const penaltyMoney = Math.round(((dayPenaltyMins / 60) * hourlyRate) * 100) / 100;
-      const grossMoney = Math.round((dayHours * hourlyRate) * 100) / 100;
+      const grossMoney = Math.round(dailyRate * 100) / 100;
       const netMoney = Math.max(0, Math.round((grossMoney - penaltyMoney) * 100) / 100);
 
       let statusBadge = { text: '⚪ Not Started / Off', color: 'bg-slate-800 text-slate-400 border-slate-700' };
@@ -203,9 +203,19 @@ export default function PayrollPage() {
     });
   };
 
-  // Filtered records
+  // Deduplicate and filter records
   const filteredRecords = useMemo(() => {
-    return payrollRecords.filter((record) => {
+    const seen = new Set<string>();
+    const uniqueList: any[] = [];
+    payrollRecords.forEach(r => {
+      const idKey = r.employeeId || r.employee?.id || r.id;
+      if (idKey && !seen.has(idKey)) {
+        seen.add(idKey);
+        uniqueList.push(r);
+      }
+    });
+
+    return uniqueList.filter((record) => {
       const name = record.employee?.name || '';
       const code = record.employee?.employeeCode || record.employeeId || '';
       const matchesSearch = name.toLowerCase().includes(searchTerm.toLowerCase()) || code.toLowerCase().includes(searchTerm.toLowerCase());
@@ -222,8 +232,18 @@ export default function PayrollPage() {
     let paidCount = 0;
     let pendingCount = 0;
 
-    payrollRecords.forEach((r) => {
-      const sal = Number(r.baseSalary || r.employee?.salaryRate || 15000);
+    const seen = new Set<string>();
+    const uniqueList: any[] = [];
+    payrollRecords.forEach(r => {
+      const idKey = r.employeeId || r.employee?.id || r.id;
+      if (idKey && !seen.has(idKey)) {
+        seen.add(idKey);
+        uniqueList.push(r);
+      }
+    });
+
+    uniqueList.forEach((r) => {
+      const sal = Number(r.employee?.salaryRate || r.baseSalary || 15000);
       const gross = sal + Number(r.overtimePay || 0);
 
       const empAtts = attendances.filter(a => a.employeeId === r.employeeId);
@@ -232,7 +252,7 @@ export default function PayrollPage() {
         calcLateMins += computeLateMinutes(att, r.employee?.shift);
       });
 
-      const hourlyRate = (sal / 30) / 24;
+      const hourlyRate = (sal / 30) / 9;
       const calcPenVal = Math.round((calcLateMins / 60) * hourlyRate);
       const pen = Math.max(Number(r.penaltyDeductions || 0), calcPenVal);
 
@@ -246,7 +266,7 @@ export default function PayrollPage() {
       else pendingCount++;
     });
 
-    return { totalGross, totalNet, totalPenalties, paidCount, pendingCount };
+    return { totalGross, totalNet, totalPenalties, paidCount, pendingCount, totalStaffCount: uniqueList.length };
   }, [payrollRecords, attendances]);
 
   return (
@@ -259,7 +279,7 @@ export default function PayrollPage() {
             <span>Monthly Staff Payroll Ledger</span>
           </h1>
           <p className="text-slate-400 text-xs sm:text-sm mt-1">
-            Standard 30-Day Cycle • Formula: Base ÷ 30 Days = Daily ÷ 24 Hrs = Hourly Rate
+            Standard 30-Day Cycle • Formula: Base Monthly Salary ÷ 30 Days = Daily ÷ 9 Shift Hours = Hourly Rate
           </p>
         </div>
 
@@ -297,7 +317,7 @@ export default function PayrollPage() {
           <div className="text-xl sm:text-3xl font-black text-white mt-1">
             ₹{totals.totalGross.toLocaleString('en-IN')}
           </div>
-          <div className="text-[11px] text-slate-400 mt-1 font-mono">Gross Before Deductions</div>
+          <div className="text-[11px] text-slate-400 mt-1 font-mono">Gross Base Salaries</div>
         </div>
 
         <div className="bg-slate-800/80 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-slate-700/70 shadow-lg relative overflow-hidden">
@@ -305,7 +325,7 @@ export default function PayrollPage() {
           <div className="text-xl sm:text-3xl font-black text-rose-400 mt-1">
             -₹{totals.totalPenalties.toLocaleString('en-IN')}
           </div>
-          <div className="text-[11px] text-rose-300/80 mt-1 font-mono">Accumulated Penalty Deductions</div>
+          <div className="text-[11px] text-rose-300/80 mt-1 font-mono">Accumulated Late Penalties</div>
         </div>
 
         <div className="bg-slate-800/80 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-slate-700/70 shadow-lg relative overflow-hidden">
@@ -323,7 +343,7 @@ export default function PayrollPage() {
             <span className="text-slate-600">/</span>
             <span className="text-amber-400">{totals.pendingCount} Pending</span>
           </div>
-          <div className="text-[11px] text-slate-400 mt-1 font-mono">Out of {payrollRecords.length} Staff Ledgers</div>
+          <div className="text-[11px] text-slate-400 mt-1 font-mono">Out of {totals.totalStaffCount} Staff Ledgers</div>
         </div>
       </div>
 
@@ -347,7 +367,7 @@ export default function PayrollPage() {
               filterStatus === 'all' ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-900 text-slate-400 border border-slate-700 hover:text-white'
             }`}
           >
-            All Staff ({payrollRecords.length})
+            All Staff ({totals.totalStaffCount})
           </button>
           <button
             onClick={() => setFilterStatus('pending')}
@@ -381,7 +401,7 @@ export default function PayrollPage() {
                 <th className="py-4 px-4">Earned Salary</th>
                 <th className="py-4 px-4">Base Rate</th>
                 <th className="py-4 px-4">LATE DEDUCTIONS</th>
-                <th className="py-4 px-4">Net Salary</th>
+                <th className="py-4 px-4">NET SALARY PAYABLE</th>
                 <th className="py-4 px-4">Payment Status</th>
                 <th className="py-4 px-6 text-right">Actions</th>
               </tr>
@@ -409,7 +429,7 @@ export default function PayrollPage() {
                   const empCode = record.employee?.employeeCode || record.employeeId || 'ID N/A';
                   const monthlySalary = Number(record.employee?.salaryRate || record.baseSalary || 15000);
                   const dailyRate = monthlySalary / 30;
-                  const hourlyRate = dailyRate / 24;
+                  const hourlyRate = dailyRate / 9; // 9-hour work day
                   const baseVal = monthlySalary;
                   let workHrs = Number(record.totalWorkingHours || 0);
                   const penaltyVal = Number(record.penaltyDeductions || 0);
@@ -438,26 +458,9 @@ export default function PayrollPage() {
                   }).filter(d => d.length > 0));
                   const daysWorkedCount = Math.max(uniqueDays.size, workHrs > 0 ? 1 : 0);
 
-                  if (record.status !== 'paid' && attendances.length > 0) {
-                    let totalWorkedMins = 0;
-                    empAtts.forEach(att => {
-                      if (att.checkOutTime && att.checkInTime) {
-                        const ms = new Date(att.checkOutTime).getTime() - new Date(att.checkInTime).getTime();
-                        totalWorkedMins += Math.max(0, Math.floor(ms / 60000));
-                      } else if (att.status === 'working' && att.checkInTime) {
-                        const ms = Date.now() - new Date(att.checkInTime).getTime();
-                        totalWorkedMins += Math.max(0, Math.floor(ms / 60000));
-                      } else if (att.regularMinutes && att.regularMinutes > 0) {
-                        totalWorkedMins += att.regularMinutes;
-                      }
-                    });
-                    const computedHrs = Math.round((totalWorkedMins / 60) * 10) / 10;
-                    if (computedHrs > workHrs) {
-                      workHrs = computedHrs;
-                    }
-                  }
-
-                  const workAmount = Math.round(workHrs * hourlyRate + otPay);
+                  // Base Earned Salary is the full monthly base salary for fixed monthly staff
+                  const earnedBaseSalary = monthlySalary;
+                  const workAmount = Math.round(earnedBaseSalary + otPay);
                   const netVal = record.status === 'paid' ? Number(record.netSalary || 0) : Math.max(0, Math.round(workAmount - finalPenaltyVal));
                   const initials = empName.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase();
 
@@ -506,14 +509,14 @@ export default function PayrollPage() {
                           ₹{workAmount.toLocaleString('en-IN')}
                         </div>
                         <div className="text-[11px] text-slate-400 font-medium mt-0.5">
-                          Earned ({workHrs.toFixed(1)}h)
+                          Base Monthly
                         </div>
                       </td>
                       <td className="py-4 px-4 whitespace-nowrap font-semibold text-slate-300">
                         ₹{baseVal.toLocaleString('en-IN')}
                       </td>
 
-                      {/* ── LATE DEDUCTIONS COLUMN (LATE HOURS & LATE DEDUCTED PRICE) ── */}
+                      {/* ── LATE DEDUCTIONS COLUMN ── */}
                       <td className="py-4 px-4 whitespace-nowrap">
                         {totalLateMins > 0 || finalPenaltyVal > 0 ? (
                           <div className="inline-flex flex-col items-start bg-rose-500/15 border border-rose-500/30 px-3 py-1.5 rounded-xl shadow-xs">
@@ -532,11 +535,13 @@ export default function PayrollPage() {
                         )}
                       </td>
 
+                      {/* ── NET SALARY PAYABLE COLUMN ── */}
                       <td className="py-4 px-4 whitespace-nowrap">
-                        <div className="font-black text-white text-lg tracking-tight bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-700 inline-block shadow-sm">
+                        <div className="font-black text-emerald-400 text-lg tracking-tight bg-slate-900 px-3.5 py-1.5 rounded-xl border border-emerald-500/30 inline-block shadow-sm">
                           ₹{netVal.toLocaleString('en-IN')}
                         </div>
                       </td>
+
                       <td className="py-4 px-4 whitespace-nowrap">
                         {record.status === 'paid' ? (
                           <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-3 py-1 rounded-full text-xs font-bold inline-flex items-center gap-1.5 shadow-xs">
@@ -594,7 +599,7 @@ export default function PayrollPage() {
               const empCode = record.employee?.employeeCode || record.employeeId || 'ID N/A';
               const monthlySalary = Number(record.employee?.salaryRate || record.baseSalary || 15000);
               const dailyRate = monthlySalary / 30;
-              const hourlyRate = dailyRate / 24;
+              const hourlyRate = dailyRate / 9;
               const baseVal = monthlySalary;
               let workHrs = Number(record.totalWorkingHours || 0);
               const penaltyVal = Number(record.penaltyDeductions || 0);
@@ -622,26 +627,8 @@ export default function PayrollPage() {
               }).filter(d => d.length > 0));
               const daysWorkedCount = Math.max(uniqueDays.size, workHrs > 0 ? 1 : 0);
 
-              if (record.status !== 'paid' && attendances.length > 0) {
-                let totalWorkedMins = 0;
-                empAtts.forEach(att => {
-                  if (att.checkOutTime && att.checkInTime) {
-                    const ms = new Date(att.checkOutTime).getTime() - new Date(att.checkInTime).getTime();
-                    totalWorkedMins += Math.max(0, Math.floor(ms / 60000));
-                  } else if (att.status === 'working' && att.checkInTime) {
-                    const ms = Date.now() - new Date(att.checkInTime).getTime();
-                    totalWorkedMins += Math.max(0, Math.floor(ms / 60000));
-                  } else if (att.regularMinutes && att.regularMinutes > 0) {
-                    totalWorkedMins += att.regularMinutes;
-                  }
-                });
-                const computedHrs = Math.round((totalWorkedMins / 60) * 10) / 10;
-                if (computedHrs > workHrs) {
-                  workHrs = computedHrs;
-                }
-              }
-
-              const workAmount = Math.round(workHrs * hourlyRate + otPay);
+              const earnedBaseSalary = monthlySalary;
+              const workAmount = Math.round(earnedBaseSalary + otPay);
               const netVal = record.status === 'paid' ? Number(record.netSalary || 0) : Math.max(0, Math.round(workAmount - finalPenaltyVal));
               const initials = empName.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase();
 
@@ -685,7 +672,7 @@ export default function PayrollPage() {
                       {totalLateMins > 0 && <span className="text-[10px] text-rose-300 block">⚠️ {formatLateDuration(totalLateMins)} late</span>}
                     </div>
                     <div className="bg-slate-800/70 p-2.5 rounded-xl border border-slate-700/50 text-center bg-gradient-to-br from-indigo-950/50 to-slate-800">
-                      <span className="text-indigo-300 block text-[10px] font-bold uppercase">Net Pay</span>
+                      <span className="text-indigo-300 block text-[10px] font-bold uppercase">Net Payable</span>
                       <span className="font-black text-emerald-400 text-sm">₹{netVal.toLocaleString()}</span>
                     </div>
                   </div>
@@ -753,7 +740,7 @@ export default function PayrollPage() {
             {/* Pay Formula Strip */}
             <div className="bg-indigo-950/40 px-6 py-3.5 border-b border-indigo-500/30 flex flex-wrap items-center justify-between text-xs gap-4 font-mono">
               <div className="flex items-center gap-2 text-indigo-300 font-semibold">
-                <span>⚡ Formula: Base Salary ÷ 30 Days = Daily Rate ÷ 24 Hours = Hourly Rate</span>
+                <span>⚡ Formula: Base Salary ÷ 30 Days = Daily Rate ÷ 9 Hours = Hourly Rate</span>
               </div>
               <div className="flex items-center gap-4 font-extrabold text-slate-200">
                 <span>Base: <strong className="text-white">₹{selectedEmployee.baseVal.toLocaleString('en-IN')}</strong></span>
