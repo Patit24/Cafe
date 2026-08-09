@@ -1,26 +1,41 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, SafeAreaView, StyleSheet, ActivityIndicator, Alert } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  SafeAreaView,
+  StyleSheet,
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  Platform,
+} from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { API_BASE_URL } from '@/lib/api';
 
-export default function DutyTimerScreen() {
-  const [elapsedSeconds, setElapsedSeconds] = useState(0); 
-  const [isOnBreak, setIsOnBreak] = useState(false);
+export default function ActiveDutyScreen() {
+  const { employeeId, employeeName, score } = useLocalSearchParams<{
+    employeeId: string;
+    employeeName?: string;
+    score?: string;
+  }>();
+
+  const router = useRouter();
   const [employee, setEmployee] = useState<any>(null);
+  const [attendanceRecord, setAttendanceRecord] = useState<any>(null);
+
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [isOnBreak, setIsOnBreak] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [shiftTotalSeconds, setShiftTotalSeconds] = useState(9 * 3600); // default 9h
+
+  const [hourlyPayRate, setHourlyPayRate] = useState<number>(0);
   const [autoEndTriggered, setAutoEndTriggered] = useState(false);
   const autoEndRef = useRef(false);
 
-  const router = useRouter();
-  const { employeeId, employeeName, score } = useLocalSearchParams<{ employeeId: string; employeeName: string; score: string }>();
+  const shiftHours = Number(employee?.shift?.requiredHours) || 9;
+  const shiftTotalSeconds = shiftHours * 3600;
 
-  const [attendanceRecord, setAttendanceRecord] = useState<any>(null);
-  const [daysWorked, setDaysWorked] = useState(1);
-  const [hourlyPayRate, setHourlyPayRate] = useState(0);
-  const [penaltyMinutes, setPenaltyMinutes] = useState(0);
-
-  // Main elapsed timer
+  // Timer loop when on active duty
   useEffect(() => {
     let timer: ReturnType<typeof setInterval>;
     if (!isOnBreak) {
@@ -58,93 +73,43 @@ export default function DutyTimerScreen() {
           const dailyRate = monthlySalary / 30;
           const hourlyRate = dailyRate / 24;
           setHourlyPayRate(Math.round(hourlyRate * 100) / 100);
-
-          // Get shift duration in seconds
-          if (empData.shift?.requiredHours) {
-            setShiftTotalSeconds(Number(empData.shift.requiredHours) * 3600);
-          }
         }
 
         if (Array.isArray(attData)) {
-          const empAttendances = attData.filter((a: any) => a.employeeId === employeeId);
-          const uniqueDates = new Set(empAttendances.map((a: any) => {
-            const dateStr = a.date ? a.date.toString() : a.checkInTime ? a.checkInTime.toString() : new Date().toISOString();
-            return dateStr.split('T')[0];
-          }));
-          setDaysWorked(Math.max(1, uniqueDates.size));
-
           const active = attData.find(
             (a: any) => a.employeeId === employeeId && (a.status === 'working' || a.status === 'on_break')
           );
+
           if (active) {
             setAttendanceRecord(active);
             setIsOnBreak(active.status === 'on_break');
-            setPenaltyMinutes(active.penaltyDeductionMinutes || 0);
+
             if (active.checkInTime) {
-              const startMs = new Date(active.checkInTime).getTime();
-              const diffSec = Math.max(0, Math.floor((Date.now() - startMs) / 1000));
-              setElapsedSeconds(diffSec);
+              const checkInMs = new Date(active.checkInTime).getTime();
+              const nowMs = Date.now();
+              const totalSec = Math.max(0, Math.floor((nowMs - checkInMs) / 1000));
+              const breakSec = (active.breakMinutes || 0) * 60;
+              setElapsedSeconds(Math.max(0, totalSec - breakSec));
             }
           }
         }
-        setLoading(false);
       })
-      .catch(err => {
-        console.error('Failed to load duty data:', err);
-        setLoading(false);
-      });
+      .catch(err => console.error('Error fetching duty details:', err))
+      .finally(() => setLoading(false));
   }, [employeeId]);
 
-  const formatTime = (totalSeconds: number) => {
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-  };
-
-  const formatHM = (totalSeconds: number) => {
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    if (hours > 0 && minutes > 0) return `${hours}h ${minutes}m`;
-    if (hours > 0) return `${hours}h`;
-    return `${minutes}m`;
-  };
-
-  const getInitials = (name: string) => {
-    if (!name) return 'EL';
-    return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
-  };
-
-  const displayName = employee?.name || employeeName || 'Employee';
-
-  // Real-time earned pay calculation (payable working seconds capped at required shift hours)
-  const payableWorkingSeconds = Math.min(elapsedSeconds, shiftTotalSeconds);
-  const earnedSeconds = Math.max(0, payableWorkingSeconds - (penaltyMinutes * 60));
-  const earnedPay = Math.round((earnedSeconds / 3600) * hourlyPayRate * 100) / 100;
-  const penaltyPay = Math.round(((penaltyMinutes / 60) * hourlyPayRate) * 100) / 100;
-
-  // Shift progress (0 to 1)
-  const shiftProgress = shiftTotalSeconds > 0 ? Math.min(1, elapsedSeconds / shiftTotalSeconds) : 0;
-  const remainingSeconds = Math.max(0, shiftTotalSeconds - elapsedSeconds);
-  const isShiftComplete = elapsedSeconds >= shiftTotalSeconds;
-
   const handleToggleBreak = async () => {
+    const nextStatus = isOnBreak ? 'working' : 'on_break';
+    setIsOnBreak(!isOnBreak);
+
     if (attendanceRecord?.id) {
       try {
-        if (!isOnBreak) {
-          await fetch(`${API_BASE_URL}/attendance/start-break/${attendanceRecord.id}`, { method: 'POST' });
-        } else {
-          // resume - find the latest open break
-          const latestBreak = attendanceRecord?.breaks?.find((b: any) => !b.endTime);
-          if (latestBreak) {
-            await fetch(`${API_BASE_URL}/attendance/resume-duty/${latestBreak.id}/${attendanceRecord.id}`, { method: 'POST' });
-          }
-        }
+        const endpoint = nextStatus === 'on_break' ? 'break-start' : 'break-end';
+        await fetch(`${API_BASE_URL}/attendance/${endpoint}/${attendanceRecord.id}`, { method: 'POST' });
       } catch (e) {
         console.error('Break sync error:', e);
       }
     }
-    setIsOnBreak(!isOnBreak);
   };
 
   const handleAutoCheckOut = async () => {
@@ -155,32 +120,39 @@ export default function DutyTimerScreen() {
     } catch (e) {
       console.error('Auto check-out sync error:', e);
     }
-    // Small delay then redirect
     setTimeout(() => router.replace('/'), 3000);
   };
 
   const handleCheckOut = async () => {
-    Alert.alert(
-      'End Duty Shift',
-      `Are you sure you want to end duty for ${displayName}?\n\nEarned: ₹${earnedPay.toLocaleString('en-IN')} (${formatHM(earnedSeconds)} worked)`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'End Duty',
-          style: 'destructive',
-          onPress: async () => {
-            if (attendanceRecord?.id) {
-              try {
-                await fetch(`${API_BASE_URL}/attendance/check-out/${attendanceRecord.id}`, { method: 'POST' });
-              } catch (e) {
-                console.error('Check-out sync error:', e);
-              }
-            }
-            router.replace('/');
+    const executeCheckOut = async () => {
+      if (attendanceRecord?.id) {
+        try {
+          await fetch(`${API_BASE_URL}/attendance/check-out/${attendanceRecord.id}`, { method: 'POST' });
+        } catch (e) {
+          console.error('Check-out sync error:', e);
+        }
+      }
+      router.replace('/');
+    };
+
+    if (Platform.OS === 'web') {
+      if (window.confirm(`Are you sure you want to end duty for ${displayName}?\nEarned Today: ₹${earnedPay.toLocaleString('en-IN')}`)) {
+        await executeCheckOut();
+      }
+    } else {
+      Alert.alert(
+        'End Duty Shift',
+        `Are you sure you want to end duty for ${displayName}?\n\nEarned: ₹${earnedPay.toLocaleString('en-IN')} (${formatHM(earnedSeconds)} worked)`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'End Duty',
+            style: 'destructive',
+            onPress: executeCheckOut,
           },
-        },
-      ]
-    );
+        ]
+      );
+    }
   };
 
   const getScoreBadgeText = () => {
@@ -194,14 +166,14 @@ export default function DutyTimerScreen() {
     if (!attendanceRecord?.checkInTime) return null;
     const checkIn = new Date(attendanceRecord.checkInTime);
     const checkInMins = checkIn.getHours() * 60 + checkIn.getMinutes();
-    
+
     let shiftStartMins = 480;
     let assignedStr = '08:00 AM';
     const shiftObj = employee?.shift || attendanceRecord?.shift;
     if (shiftObj && shiftObj.startTime) {
       const shiftDate = new Date(shiftObj.startTime);
       shiftStartMins = shiftDate.getUTCHours() * 60 + shiftDate.getUTCMinutes();
-      assignedStr = `${String(shiftDate.getUTCHours()).padStart(2,'0')}:${String(shiftDate.getUTCMinutes()).padStart(2,'0')}`;
+      assignedStr = `${String(shiftDate.getUTCHours()).padStart(2, '0')}:${String(shiftDate.getUTCMinutes()).padStart(2, '0')}`;
     }
 
     const checkInTimeStr = checkIn.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -220,6 +192,45 @@ export default function DutyTimerScreen() {
 
   const lateInfo = getLateDetails();
 
+  const getInitials = (nameStr: string) => {
+    if (!nameStr) return 'EL';
+    const parts = nameStr.trim().split(' ');
+    if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    return nameStr.substring(0, 2).toUpperCase();
+  };
+
+  const formatTime = (totalSec: number) => {
+    const hrs = Math.floor(totalSec / 3600);
+    const mins = Math.floor((totalSec % 3600) / 60);
+    const secs = totalSec % 60;
+    return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  };
+
+  const formatHM = (totalSec: number) => {
+    const hrs = Math.floor(totalSec / 3600);
+    const mins = Math.floor((totalSec % 3600) / 60);
+    if (hrs > 0) return `${hrs}h ${mins}m`;
+    return `${mins}m`;
+  };
+
+  // Payable seconds capped at shiftTotalSeconds (Overtime beyond shift is unpayable)
+  const payableWorkingSeconds = Math.min(elapsedSeconds, shiftTotalSeconds);
+
+  // Late penalty calculation
+  const penaltyMinutes = attendanceRecord?.penaltyDeductionMinutes || 0;
+  const penaltySeconds = penaltyMinutes * 60;
+  const earnedSeconds = Math.max(0, payableWorkingSeconds - penaltySeconds);
+
+  const earnedPay = Math.round((earnedSeconds / 3600) * hourlyPayRate * 100) / 100;
+  const penaltyPay = Math.round((penaltySeconds / 3600) * hourlyPayRate * 100) / 100;
+
+  const shiftProgress = Math.min(1.0, elapsedSeconds / shiftTotalSeconds);
+  const remainingSeconds = Math.max(0, shiftTotalSeconds - elapsedSeconds);
+  const isShiftComplete = elapsedSeconds >= shiftTotalSeconds;
+
+  const displayName = employeeName || employee?.name || 'Kitchen Employee';
+  const daysWorked = 1;
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -236,15 +247,15 @@ export default function DutyTimerScreen() {
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
           <Text style={{ fontSize: 64 }}>🏁</Text>
           <Text style={{ fontSize: 28, fontWeight: '800', color: '#ffffff', textAlign: 'center', marginTop: 16 }}>
-            Shift Complete!
+            Shift Automatically Ended!
           </Text>
-          <Text style={{ fontSize: 16, color: '#94a3b8', textAlign: 'center', marginTop: 8 }}>
-            {displayName}'s duty has been automatically ended.
+          <Text style={{ fontSize: 15, color: '#94a3b8', textAlign: 'center', marginTop: 8 }}>
+            {displayName}'s duty has been automatically closed after reaching 2 hours past shift end time.
           </Text>
           <View style={{ marginTop: 24, backgroundColor: 'rgba(16,185,129,0.15)', borderWidth: 1, borderColor: '#10b981', borderRadius: 20, padding: 20, alignItems: 'center', width: '100%' }}>
             <Text style={{ color: '#94a3b8', fontSize: 12, fontWeight: '700', letterSpacing: 1 }}>TOTAL EARNED TODAY</Text>
             <Text style={{ color: '#10b981', fontSize: 40, fontWeight: '800', marginTop: 4 }}>₹{earnedPay.toLocaleString('en-IN')}</Text>
-            <Text style={{ color: '#64748b', fontSize: 12, marginTop: 4 }}>{formatHM(earnedSeconds)} worked</Text>
+            <Text style={{ color: '#64748b', fontSize: 12, marginTop: 4 }}>{formatHM(earnedSeconds)} worked (Capped at shift max)</Text>
           </View>
           <Text style={{ color: '#475569', fontSize: 13, marginTop: 24 }}>Redirecting to kiosk in 3 seconds...</Text>
         </View>
@@ -254,9 +265,8 @@ export default function DutyTimerScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.contentWrapper}>
-        
-        {/* Employee Profile Header */}
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* Employee Profile Header Card */}
         <View style={styles.headerCard}>
           <View style={styles.profileBadge}>
             <Text style={styles.profileInitials}>{getInitials(displayName)}</Text>
@@ -290,7 +300,7 @@ export default function DutyTimerScreen() {
             <View style={[styles.statusDot, isOnBreak ? styles.statusDotBreak : styles.statusDotActive]} />
             <Text style={styles.timerLabel}>{isOnBreak ? 'ON BREAK SESSION' : 'ACTIVE DUTY SESSION'}</Text>
           </View>
-          
+
           <Text style={[styles.timerValue, isOnBreak && styles.timerValueBreak]}>
             {formatTime(elapsedSeconds)}
           </Text>
@@ -303,7 +313,7 @@ export default function DutyTimerScreen() {
           {/* Time remaining / shift info */}
           <View style={styles.shiftStatusRow}>
             {isShiftComplete ? (
-              <Text style={styles.shiftCompleteText}>✅ Shift target reached!</Text>
+              <Text style={styles.shiftCompleteText}>✅ Shift target reached! (Auto-close in 2h if not ended)</Text>
             ) : (
               <Text style={styles.shiftRemainingText}>
                 ⏳ {formatHM(remainingSeconds)} remaining of {formatHM(shiftTotalSeconds)} shift
@@ -324,33 +334,30 @@ export default function DutyTimerScreen() {
           </View>
         </View>
 
-        {/* Actions */}
+        {/* PROMINENT ACTION BUTTONS */}
         <View style={styles.actionContainer}>
+          {/* 1. Toggle Break Button */}
           {isOnBreak ? (
-            <TouchableOpacity style={styles.resumeButton} onPress={handleToggleBreak}>
+            <TouchableOpacity style={styles.resumeButton} onPress={handleToggleBreak} activeOpacity={0.85}>
               <Text style={styles.resumeButtonText}>▶️  Resume Duty</Text>
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity style={styles.breakButton} onPress={handleToggleBreak}>
+            <TouchableOpacity style={styles.breakButton} onPress={handleToggleBreak} activeOpacity={0.85}>
               <Text style={styles.breakButtonText}>☕  Start Break</Text>
             </TouchableOpacity>
           )}
-          
-          <TouchableOpacity 
-            style={styles.backKioskButton} 
-            onPress={() => router.push('/')}
-          >
-            <Text style={styles.backKioskButtonText}>⬅️  Back to Kiosk (Next Employee)</Text>
+
+          {/* 2. Prominent End Duty Button (ALWAYS VISIBLE whether working or on break) */}
+          <TouchableOpacity style={styles.endButton} onPress={handleCheckOut} activeOpacity={0.85}>
+            <Text style={styles.endButtonText}>🏁  End Duty Shift</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={styles.endButton} 
-            onPress={handleCheckOut}
-          >
-            <Text style={styles.endButtonText}>🏁  End Duty (Day {daysWorked})</Text>
+          {/* 3. Navigation Back to Kiosk */}
+          <TouchableOpacity style={styles.backKioskButton} onPress={() => router.push('/')} activeOpacity={0.85}>
+            <Text style={styles.backKioskButtonText}>⬅️  Back to Kiosk (Next Employee)</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -358,103 +365,125 @@ export default function DutyTimerScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#090D16',
   },
-  contentWrapper: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  scrollContent: {
     paddingVertical: 20,
     paddingHorizontal: 16,
+    alignItems: 'center',
   },
   headerCard: {
     width: '100%',
     maxWidth: 480,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#0F172A',
+    borderWidth: 1,
+    borderColor: '#1E293B',
     borderRadius: 24,
     padding: 20,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 12,
-    elevation: 2,
+    marginBottom: 16,
   },
   profileBadge: {
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: '#7c3aed',
+    backgroundColor: '#8B5CF6',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 10,
-    shadowColor: '#7c3aed',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 3,
+    marginBottom: 12,
   },
   profileInitials: {
-    fontSize: 22,
+    color: '#FFFFFF',
+    fontSize: 24,
     fontWeight: '800',
-    color: '#ffffff',
   },
   employeeName: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '800',
-    color: '#0f172a',
+    color: '#F8FAFC',
   },
   employeeRole: {
-    fontSize: 13,
-    color: '#64748b',
-    marginTop: 3,
+    fontSize: 14,
+    color: '#94A3B8',
+    marginTop: 4,
     fontWeight: '500',
-    textAlign: 'center',
   },
   auditBadgeContainer: {
-    backgroundColor: '#f0fdf4',
-    borderColor: '#86efac',
+    marginTop: 12,
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
     borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.3)',
+    paddingVertical: 6,
+    paddingHorizontal: 16,
     borderRadius: 20,
-    paddingVertical: 5,
-    paddingHorizontal: 14,
-    marginTop: 10,
     alignItems: 'center',
   },
   auditBadgeText: {
-    color: '#15803d',
+    color: '#34D399',
+    fontSize: 13,
     fontWeight: '700',
-    fontSize: 12,
   },
   auditBadgeSubtext: {
-    color: '#166534',
-    fontSize: 10,
-    marginTop: 1,
-    fontWeight: '500',
+    color: '#64748B',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  lateCard: {
+    width: '100%',
+    borderRadius: 16,
+    padding: 12,
+    marginTop: 14,
+    alignItems: 'center',
+  },
+  lateCardWarning: {
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.4)',
+  },
+  lateCardSuccess: {
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.4)',
+  },
+  lateCardTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  lateTextWarning: {
+    color: '#FBBF24',
+  },
+  lateTextSuccess: {
+    color: '#34D399',
+  },
+  lateCardSubtitle: {
+    fontSize: 12,
+    color: '#94A3B8',
+    marginTop: 2,
+  },
+  penaltyText: {
+    fontSize: 12,
+    color: '#F87171',
+    fontWeight: '700',
+    marginTop: 4,
   },
   timerContainer: {
     width: '100%',
     maxWidth: 480,
-    backgroundColor: '#0f172a',
-    borderRadius: 28,
-    paddingVertical: 24,
-    paddingHorizontal: 24,
+    backgroundColor: '#0F172A',
+    borderWidth: 1,
+    borderColor: '#1E293B',
+    borderRadius: 24,
+    padding: 20,
     alignItems: 'center',
-    shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.2,
-    shadowRadius: 20,
-    elevation: 6,
+    marginBottom: 16,
   },
   timerContainerBreak: {
-    backgroundColor: '#1e1b4b',
+    borderColor: '#F59E0B',
   },
   timerHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   statusDot: {
     width: 8,
@@ -463,197 +492,149 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   statusDotActive: {
-    backgroundColor: '#22c55e',
+    backgroundColor: '#10B981',
   },
   statusDotBreak: {
-    backgroundColor: '#f97316',
+    backgroundColor: '#F59E0B',
   },
   timerLabel: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#94a3b8',
-    letterSpacing: 2,
+    color: '#94A3B8',
+    letterSpacing: 1.2,
   },
   timerValue: {
-    fontSize: 52,
+    fontSize: 44,
     fontWeight: '800',
-    color: '#ffffff',
+    color: '#38BDF8',
+    marginVertical: 4,
     fontVariant: ['tabular-nums'],
-    letterSpacing: -1,
   },
   timerValueBreak: {
-    color: '#fb923c',
+    color: '#FBBF24',
   },
   progressBarContainer: {
     width: '100%',
     height: 6,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: '#1E293B',
     borderRadius: 3,
-    marginTop: 14,
     overflow: 'hidden',
+    marginVertical: 12,
   },
   progressBarFill: {
     height: '100%',
-    backgroundColor: '#22c55e',
+    backgroundColor: '#38BDF8',
     borderRadius: 3,
   },
   shiftStatusRow: {
-    marginTop: 8,
-    alignItems: 'center',
+    marginBottom: 14,
   },
   shiftRemainingText: {
-    fontSize: 11,
-    color: '#94a3b8',
+    color: '#94A3B8',
+    fontSize: 13,
     fontWeight: '600',
   },
   shiftCompleteText: {
-    fontSize: 12,
-    color: '#22c55e',
+    color: '#34D399',
+    fontSize: 13,
     fontWeight: '700',
   },
   earnedPillRow: {
     flexDirection: 'row',
-    gap: 10,
-    marginTop: 14,
     width: '100%',
+    gap: 12,
   },
   earnedPill: {
     flex: 1,
-    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    backgroundColor: '#1E293B',
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.3)',
-    borderRadius: 14,
-    paddingVertical: 10,
+    borderColor: '#334155',
+    padding: 12,
+    borderRadius: 16,
     alignItems: 'center',
   },
   ratePill: {
     flex: 1,
-    backgroundColor: 'rgba(99, 102, 241, 0.12)',
+    backgroundColor: '#1E293B',
     borderWidth: 1,
-    borderColor: 'rgba(99, 102, 241, 0.3)',
-    borderRadius: 14,
-    paddingVertical: 10,
+    borderColor: '#334155',
+    padding: 12,
+    borderRadius: 16,
     alignItems: 'center',
   },
   earnedLabel: {
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: '800',
-    color: '#94a3b8',
-    letterSpacing: 1,
+    color: '#64748B',
+    letterSpacing: 0.8,
   },
   earnedValue: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#10b981',
+    color: '#10B981',
     marginTop: 2,
   },
   rateValue: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '800',
-    color: '#818cf8',
+    color: '#C084FC',
     marginTop: 2,
   },
   actionContainer: {
     width: '100%',
     maxWidth: 480,
-    gap: 10,
+    gap: 12,
   },
   breakButton: {
-    backgroundColor: '#f97316',
-    paddingVertical: 15,
+    backgroundColor: '#EA580C',
+    paddingVertical: 16,
     borderRadius: 16,
     alignItems: 'center',
-    shadowColor: '#f97316',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
   },
   breakButtonText: {
-    color: '#ffffff',
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
   },
   resumeButton: {
-    backgroundColor: '#2563eb',
-    paddingVertical: 15,
+    backgroundColor: '#2563EB',
+    paddingVertical: 16,
     borderRadius: 16,
     alignItems: 'center',
-    shadowColor: '#2563eb',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
   },
   resumeButtonText: {
-    color: '#ffffff',
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
   },
-  backKioskButton: {
-    backgroundColor: '#0f172a',
-    paddingVertical: 14,
-    borderRadius: 16,
-    alignItems: 'center',
-    shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-  },
-  backKioskButtonText: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '700',
-  },
   endButton: {
-    backgroundColor: '#ffffff',
-    paddingVertical: 14,
+    backgroundColor: '#DC2626',
+    paddingVertical: 16,
     borderRadius: 16,
     alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: '#e2e8f0',
+    shadowColor: '#DC2626',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 6,
   },
   endButtonText: {
-    color: '#e11d48',
-    fontSize: 15,
-    fontWeight: '700',
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 0.3,
   },
-  lateCard: {
-    width: '100%',
-    borderWidth: 1.5,
-    borderRadius: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    marginTop: 12,
+  backKioskButton: {
+    backgroundColor: '#1E293B',
+    borderWidth: 1,
+    borderColor: '#334155',
+    paddingVertical: 14,
+    borderRadius: 16,
     alignItems: 'center',
   },
-  lateCardWarning: {
-    backgroundColor: '#fffbeb',
-    borderColor: '#fcd34d',
-  },
-  lateCardSuccess: {
-    backgroundColor: '#f0fdf4',
-    borderColor: '#86efac',
-  },
-  lateCardTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  lateTextWarning: {
-    color: '#b45309',
-  },
-  lateTextSuccess: {
-    color: '#15803d',
-  },
-  lateCardSubtitle: {
-    fontSize: 11,
-    color: '#475569',
-    marginTop: 3,
-    fontWeight: '600',
-  },
-  penaltyText: {
-    fontSize: 11,
-    color: '#dc2626',
+  backKioskButtonText: {
+    color: '#94A3B8',
+    fontSize: 14,
     fontWeight: '700',
-    marginTop: 4,
-    textAlign: 'center',
   },
 });
