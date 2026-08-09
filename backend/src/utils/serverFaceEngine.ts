@@ -1,18 +1,4 @@
 import { TextEncoder as NodeTextEncoder, TextDecoder as NodeTextDecoder } from 'util';
-const nodeUtil = require('util');
-if (nodeUtil) {
-  if (!nodeUtil.TextEncoder) nodeUtil.TextEncoder = NodeTextEncoder || globalThis.TextEncoder;
-  if (!nodeUtil.TextDecoder) nodeUtil.TextDecoder = NodeTextDecoder || globalThis.TextDecoder;
-}
-
-import * as tf from '@tensorflow/tfjs';
-let faceapi: any = null;
-try {
-  faceapi = require('@vladmandic/face-api/dist/face-api.js');
-} catch (e) {
-  console.warn('FaceAPI optional load warning:', e);
-}
-
 import jpeg from 'jpeg-js';
 import { PNG } from 'pngjs';
 import { Logger } from '@nestjs/common';
@@ -22,6 +8,31 @@ const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model';
 
 let modelsLoaded = false;
 let loadingPromise: Promise<boolean> | null = null;
+let tf: any = null;
+let faceapi: any = null;
+
+function loadEngineModulesSafe(): boolean {
+  if (tf && faceapi) return true;
+  try {
+    const nodeUtil = require('util');
+    if (nodeUtil) {
+      if (!nodeUtil.TextEncoder) nodeUtil.TextEncoder = NodeTextEncoder || globalThis.TextEncoder;
+      if (!nodeUtil.TextDecoder) nodeUtil.TextDecoder = NodeTextDecoder || globalThis.TextDecoder;
+    }
+    if (!tf) tf = require('@tensorflow/tfjs');
+    if (!faceapi) {
+      try {
+        faceapi = require('@vladmandic/face-api');
+      } catch {
+        faceapi = require('@vladmandic/face-api/dist/face-api.js');
+      }
+    }
+    return !!(tf && faceapi);
+  } catch (e) {
+    logger.warn('FaceAPI optional engine load warning:', e);
+    return false;
+  }
+}
 
 export async function initServerFaceEngine(): Promise<boolean> {
   if (modelsLoaded) return true;
@@ -29,6 +40,11 @@ export async function initServerFaceEngine(): Promise<boolean> {
 
   loadingPromise = (async () => {
     try {
+      const ok = loadEngineModulesSafe();
+      if (!ok || !tf || !faceapi) {
+        logger.warn('TensorFlow/FaceAPI native module unavailable, skipping server-side model preload.');
+        return false;
+      }
       logger.log('Initializing TF.js engine backend...');
       try {
         await tf.setBackend('wasm');
@@ -87,7 +103,6 @@ export function euclideanDistance(a: number[], b: number[]): number {
 
 export function distanceToScore(dist: number): number {
   if (!isFinite(dist)) return 0;
-  // Strict threshold: <= 0.50 distance passes (75% score or higher)
   if (dist <= 0.50) {
     return Math.round(99 - (dist / 0.50) * 24);
   } else {
@@ -100,14 +115,13 @@ export function distanceToScore(dist: number): number {
  */
 export async function extractFaceVectorFromBase64(base64Image: string): Promise<number[] | null> {
   const ready = await initServerFaceEngine();
-  if (!ready) {
-    logger.error('Cannot extract face vector because models failed to load.');
+  if (!ready || !tf || !faceapi) {
+    logger.error('Cannot extract face vector because engine models are unavailable.');
     return null;
   }
 
-  let tensor: tf.Tensor3D | null = null;
+  let tensor: any = null;
   try {
-    // 1. Strip Data URL prefix if present
     const cleanBase64 = base64Image.replace(/^data:image\/\w+;base64,/, '');
     const buffer = Buffer.from(cleanBase64, 'base64');
 
@@ -115,46 +129,40 @@ export async function extractFaceVectorFromBase64(base64Image: string): Promise<
     let height: number;
     let rgbData: Uint8Array;
 
-    // 2. Detect format (PNG vs JPEG) and decode to RGB Uint8Array
     if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) {
-      // PNG Image
       const png = PNG.sync.read(buffer);
       width = png.width;
       height = png.height;
       rgbData = new Uint8Array(width * height * 3);
       let idx = 0;
       for (let i = 0; i < png.data.length; i += 4) {
-        rgbData[idx++] = png.data[i];     // R
-        rgbData[idx++] = png.data[i + 1]; // G
-        rgbData[idx++] = png.data[i + 2]; // B
+        rgbData[idx++] = png.data[i];
+        rgbData[idx++] = png.data[i + 1];
+        rgbData[idx++] = png.data[i + 2];
       }
     } else {
-      // JPEG Image (or default)
       const raw = jpeg.decode(buffer, { useTArray: true });
       width = raw.width;
       height = raw.height;
       rgbData = new Uint8Array(width * height * 3);
       let idx = 0;
       for (let i = 0; i < raw.data.length; i += 4) {
-        rgbData[idx++] = raw.data[i];     // R
-        rgbData[idx++] = raw.data[i + 1]; // G
-        rgbData[idx++] = raw.data[i + 2]; // B
+        rgbData[idx++] = raw.data[i];
+        rgbData[idx++] = raw.data[i + 1];
+        rgbData[idx++] = raw.data[i + 2];
       }
     }
 
-    // 3. Create TensorFlow RGB Tensor
-    tensor = tf.tensor3d(rgbData, [height, width, 3], 'int32') as tf.Tensor3D;
+    tensor = tf.tensor3d(rgbData, [height, width, 3], 'int32');
 
-    // 4. Detect single face using ultra-fast TinyFaceDetector (224px inputSize is 5x faster in WASM)
     let result = await faceapi
-      .detectSingleFace(tensor as any, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.15 }))
+      .detectSingleFace(tensor, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.15 }))
       .withFaceLandmarks()
       .withFaceDescriptor();
 
     if (!result) {
-      // Fast fallback if TinyFaceDetector missed the face
       result = await faceapi
-        .detectSingleFace(tensor as any, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.2 }))
+        .detectSingleFace(tensor, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.2 }))
         .withFaceLandmarks()
         .withFaceDescriptor();
     }
