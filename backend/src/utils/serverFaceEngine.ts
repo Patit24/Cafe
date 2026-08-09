@@ -1,5 +1,18 @@
+import { TextEncoder as NodeTextEncoder, TextDecoder as NodeTextDecoder } from 'util';
+const nodeUtil = require('util');
+if (nodeUtil) {
+  if (!nodeUtil.TextEncoder) nodeUtil.TextEncoder = NodeTextEncoder || globalThis.TextEncoder;
+  if (!nodeUtil.TextDecoder) nodeUtil.TextDecoder = NodeTextDecoder || globalThis.TextDecoder;
+}
+
 import * as tf from '@tensorflow/tfjs';
-import * as faceapi from '@vladmandic/face-api';
+let faceapi: any = null;
+try {
+  faceapi = require('@vladmandic/face-api/dist/face-api.js');
+} catch (e) {
+  console.warn('FaceAPI optional load warning:', e);
+}
+
 import jpeg from 'jpeg-js';
 import { PNG } from 'pngjs';
 import { Logger } from '@nestjs/common';

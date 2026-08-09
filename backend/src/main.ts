@@ -1,3 +1,10 @@
+import { TextEncoder as NodeTextEncoder, TextDecoder as NodeTextDecoder } from 'util';
+const nodeUtil = require('util');
+if (nodeUtil) {
+  if (!nodeUtil.TextEncoder) nodeUtil.TextEncoder = NodeTextEncoder || globalThis.TextEncoder;
+  if (!nodeUtil.TextDecoder) nodeUtil.TextDecoder = NodeTextDecoder || globalThis.TextDecoder;
+}
+
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
