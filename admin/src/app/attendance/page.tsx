@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { 
   Clock, UserCheck, AlertTriangle, CheckCircle2, 
   RefreshCw, Camera, ChevronRight, Users, ShieldCheck, ShieldAlert,
-  Calendar, Timer, ArrowLeft
+  Calendar, Timer, ArrowLeft, Image as ImageIcon, Eye, X, Sparkles
 } from 'lucide-react';
 import { API_BASE_URL, fastFetch } from '@/lib/api';
 
@@ -14,6 +14,8 @@ export default function AttendancePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [selectedPhoto, setSelectedPhoto] = useState<any | null>(null);
+  const [filterType, setFilterType] = useState<'all' | 'manual' | 'ai'>('all');
 
   useEffect(() => {
     setMounted(true);
@@ -81,9 +83,13 @@ export default function AttendancePage() {
     return { isLate: false, label: '✓ On Time', assigned: assignedLabel, diffMins: diff };
   };
 
-  const workingToday = attendance.filter(r => r.status === 'working').length;
-  const lateEntries = attendance.filter(r => getLateStatus(r).isLate).length;
-  const completedEntries = attendance.filter(r => r.status === 'completed').length;
+  const photoRecords = attendance.filter(r => r.photoUrl || (r.employee?.faces && r.employee.faces.length > 0));
+
+  const filteredAttendance = attendance.filter(r => {
+    if (filterType === 'manual') return r.faceMatchScore === '-1' || Number(r.faceMatchScore) === -1 || !r.faceMatchScore;
+    if (filterType === 'ai') return Number(r.faceMatchScore) > 0;
+    return true;
+  });
 
   return (
     <div className="p-3.5 sm:p-6 lg:p-8 pb-16 bg-slate-900 text-slate-100 min-h-screen">
@@ -94,10 +100,10 @@ export default function AttendancePage() {
           <div>
             <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-white tracking-tight flex items-center gap-2">
               <Clock className="text-blue-400" size={28} />
-              Attendance Log
+              Attendance Audit & Live Photo Log
             </h1>
             <p className="text-xs sm:text-sm text-slate-400 mt-1 font-medium">
-              Real-time check-in / check-out audit with AI face verification & liveness score
+              Real-time kiosk check-in / check-out audit with live captured photos & AI verification
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
@@ -138,258 +144,294 @@ export default function AttendancePage() {
         </div>
       )}
 
-      {/* ── Stats Section ── */}
-      {!error && (
-        <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8">
-          <div className="bg-slate-800/80 backdrop-blur-md p-4 sm:p-6 rounded-2xl border border-slate-700/70 shadow-lg relative overflow-hidden flex flex-col justify-between">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] sm:text-xs text-slate-400 font-bold uppercase tracking-wider">Total Records</span>
-              <div className="w-9 h-9 rounded-xl bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400">
-                <Users size={18} />
+      {/* ── DEDICATED LIVE PHOTO PUNCH-IN AUDIT GALLERY SECTION ── */}
+      {!error && photoRecords.length > 0 && (
+        <section className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-400">
+                <Camera size={18} />
+              </div>
+              <div>
+                <h2 className="text-base sm:text-lg font-extrabold text-white flex items-center gap-2">
+                  Live Captured Punch-In Photos
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                    {photoRecords.length} CAPTURES
+                  </span>
+                </h2>
+                <p className="text-xs text-slate-400">High-resolution live camera photos captured at kiosk check-in</p>
               </div>
             </div>
-            <h3 className="text-2xl sm:text-3xl font-extrabold text-white mt-3">{loading ? '...' : attendance.length}</h3>
-            <p className="text-[11px] sm:text-xs text-slate-400 mt-1">Logged check-in entries</p>
-            <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-purple-500 to-indigo-500"></div>
+
+            {/* Filter Pills */}
+            <div className="flex items-center gap-1.5 bg-slate-800/80 p-1 rounded-xl border border-slate-700/80 text-xs">
+              <button
+                onClick={() => setFilterType('all')}
+                className={`px-3 py-1 rounded-lg font-bold transition-all ${filterType === 'all' ? 'bg-purple-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}`}
+              >
+                All
+              </button>
+              <button
+                onClick={() => setFilterType('manual')}
+                className={`px-3 py-1 rounded-lg font-bold transition-all ${filterType === 'manual' ? 'bg-amber-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}`}
+              >
+                📸 Manual Photo
+              </button>
+              <button
+                onClick={() => setFilterType('ai')}
+                className={`px-3 py-1 rounded-lg font-bold transition-all ${filterType === 'ai' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}`}
+              >
+                ⚡ AI Verified
+              </button>
+            </div>
           </div>
 
-          <div className="bg-slate-800/80 backdrop-blur-md p-4 sm:p-6 rounded-2xl border border-slate-700/70 shadow-lg relative overflow-hidden flex flex-col justify-between">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] sm:text-xs text-slate-400 font-bold uppercase tracking-wider">Working Today</span>
-              <div className="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-                <Timer size={18} />
-              </div>
-            </div>
-            <h3 className="text-2xl sm:text-3xl font-extrabold text-emerald-400 mt-3">{loading ? '...' : workingToday}</h3>
-            <p className="text-[11px] sm:text-xs text-slate-400 mt-1">Active shifts in progress</p>
-            <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-teal-500"></div>
-          </div>
+          {/* Photo Cards Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            {photoRecords.slice(0, 10).map((rec) => {
+              const photoSrc = rec.photoUrl || rec.employee?.faces?.[0]?.imageUrl || 'https://via.placeholder.com/150';
+              const isManual = rec.faceMatchScore === '-1' || Number(rec.faceMatchScore) === -1 || !rec.faceMatchScore;
+              const lateInfo = getLateStatus(rec);
 
-          <div className="bg-slate-800/80 backdrop-blur-md p-4 sm:p-6 rounded-2xl border border-slate-700/70 shadow-lg relative overflow-hidden flex flex-col justify-between">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] sm:text-xs text-slate-400 font-bold uppercase tracking-wider">Late Entries</span>
-              <div className="w-9 h-9 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
-                <AlertTriangle size={18} />
-              </div>
-            </div>
-            <h3 className="text-2xl sm:text-3xl font-extrabold text-amber-400 mt-3">{loading ? '...' : lateEntries}</h3>
-            <p className="text-[11px] sm:text-xs text-slate-400 mt-1">Punched in after shift start</p>
-            <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500 to-orange-500"></div>
-          </div>
+              return (
+                <div
+                  key={rec.id}
+                  onClick={() => setSelectedPhoto(rec)}
+                  className="group bg-slate-800/90 hover:bg-slate-800 border border-slate-700/80 hover:border-purple-500/50 rounded-2xl p-3 transition-all shadow-lg hover:shadow-purple-500/10 cursor-pointer flex flex-col justify-between"
+                >
+                  <div className="relative aspect-square w-full rounded-xl overflow-hidden bg-slate-900 border border-slate-700/60 mb-2.5">
+                    <img
+                      src={photoSrc}
+                      alt={rec.employee?.name || 'Check-in photo'}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent opacity-80 group-hover:opacity-60 transition-opacity" />
+                    
+                    {/* Mode Tag */}
+                    <div className="absolute top-2 left-2">
+                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold shadow-md border ${
+                        isManual 
+                          ? 'bg-amber-500/90 text-white border-amber-400/50' 
+                          : 'bg-emerald-500/90 text-white border-emerald-400/50'
+                      }`}>
+                        {isManual ? '📸 Manual Photo' : `⚡ AI ${Number(rec.faceMatchScore).toFixed(0)}%`}
+                      </span>
+                    </div>
 
-          <div className="bg-slate-800/80 backdrop-blur-md p-4 sm:p-6 rounded-2xl border border-slate-700/70 shadow-lg relative overflow-hidden flex flex-col justify-between">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] sm:text-xs text-slate-400 font-bold uppercase tracking-wider">Completed</span>
-              <div className="w-9 h-9 rounded-xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400">
-                <CheckCircle2 size={18} />
-              </div>
-            </div>
-            <h3 className="text-2xl sm:text-3xl font-extrabold text-blue-400 mt-3">{loading ? '...' : completedEntries}</h3>
-            <p className="text-[11px] sm:text-xs text-slate-400 mt-1">Checked out duty complete</p>
-            <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-indigo-500"></div>
+                    {/* View overlay icon */}
+                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-slate-950/40">
+                      <div className="w-9 h-9 rounded-full bg-purple-600 text-white flex items-center justify-center shadow-xl">
+                        <Eye size={18} />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="font-extrabold text-white text-xs truncate">{rec.employee?.name || 'Kitchen Staff'}</h3>
+                    <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1">
+                      <span className="font-mono text-slate-300">{formatTime(rec.checkInTime)}</span>
+                      <span className={`font-bold text-[10px] ${lateInfo.isLate ? 'text-amber-400' : 'text-emerald-400'}`}>
+                        {lateInfo.isLate ? 'Late' : 'On Time'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </section>
       )}
 
-      {/* ── Table Container ── */}
-      <section className="bg-slate-800/80 backdrop-blur-md rounded-2xl border border-slate-700/70 shadow-xl overflow-hidden mb-8">
-        <div className="p-4 sm:p-6 border-b border-slate-700/70 flex items-center justify-between bg-slate-800/50">
-          <h2 className="text-base sm:text-lg font-bold text-white tracking-wide flex items-center gap-2">
-            Attendance Audit Records
-            <span className="px-2.5 py-0.5 bg-slate-700 text-slate-300 text-xs rounded-full font-mono">{attendance.length}</span>
+      {/* ── MAIN ATTENDANCE LOG TABLE ── */}
+      <section className="bg-slate-800/80 backdrop-blur-md rounded-2xl border border-slate-700/70 shadow-xl overflow-hidden">
+        <div className="p-4 sm:p-6 border-b border-slate-700/80 flex items-center justify-between">
+          <h2 className="text-base sm:text-lg font-extrabold text-white flex items-center gap-2">
+            Detailed Punch Logs ({filteredAttendance.length})
           </h2>
+          <span className="text-xs text-slate-400 font-mono">Real-time Kiosk Feeds</span>
         </div>
 
-        {loading ? (
-          <div className="p-16 text-center text-slate-400">
-            <RefreshCw className="animate-spin w-8 h-8 text-blue-400 mx-auto mb-3" />
-            <p className="text-sm font-semibold text-slate-200">Loading attendance records...</p>
-          </div>
-        ) : (
-          <>
-            {/* Desktop Table View (≥ md) */}
-            <div className="hidden md:block overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-slate-900/80 text-slate-400 text-[11px] font-extrabold uppercase tracking-wider border-b border-slate-700/70">
-                  <tr>
-                    <th className="px-6 py-4">Date</th>
-                    <th className="px-6 py-4">Employee & Assigned Shift</th>
-                    <th className="px-6 py-4">Check-In & Late Audit</th>
-                    <th className="px-6 py-4">Check-Out</th>
-                    <th className="px-6 py-4">Duration</th>
-                    <th className="px-6 py-4">Face Match</th>
-                    <th className="px-6 py-4">Liveness</th>
-                    <th className="px-6 py-4">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-700/60">
-                  {attendance.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="px-6 py-14 text-center text-slate-400">
-                        <p className="text-base font-semibold text-slate-200">No attendance records found</p>
-                        <p className="text-xs text-slate-500 mt-1">Staff check-ins will appear here automatically.</p>
-                      </td>
-                    </tr>
-                  ) : (
-                    attendance.map((rec) => {
-                      const lateInfo = getLateStatus(rec);
-                      return (
-                        <tr key={rec.id} className="hover:bg-slate-750 transition-colors">
-                          <td className="px-6 py-4 font-mono text-slate-300 font-semibold text-xs whitespace-nowrap">
-                            {mounted ? new Date(rec.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 text-white font-black flex items-center justify-center text-xs shadow-md shrink-0 border border-white/10">
-                                {(rec.employee?.name || 'Staff').substring(0, 2).toUpperCase()}
-                              </div>
-                              <div>
-                                <p className="font-bold text-white text-sm">{rec.employee?.name || 'Kitchen Staff'}</p>
-                                <p className="text-[11px] text-purple-400 font-mono mt-0.5">{lateInfo.assigned}</p>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <p className="font-bold text-slate-100 font-mono text-sm">{formatTime(rec.checkInTime)}</p>
-                            {rec.checkInTime && (
-                              <span className={`text-[10px] font-extrabold inline-block px-2.5 py-0.5 rounded-full mt-1 border uppercase tracking-wider ${
-                                lateInfo.isLate 
-                                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' 
-                                  : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                              }`}>
-                                {lateInfo.label}
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 font-mono font-bold text-slate-300 text-sm">
-                            {formatTime(rec.checkOutTime)}
-                          </td>
-                          <td className="px-6 py-4 font-mono font-bold text-emerald-400 text-sm">
-                            {calcHours(rec.checkInTime, rec.checkOutTime)}
-                          </td>
-                          <td className="px-6 py-4">
-                            {rec.faceMatchScore ? (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-mono">
-                                <Camera size={12} />
-                                {Number(rec.faceMatchScore).toFixed(1)}%
-                              </span>
-                            ) : (
-                              <span className="text-slate-500 text-xs">—</span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4">
-                            {rec.livenessPassed === true ? (
-                              <span className="text-emerald-400 font-bold text-xs inline-flex items-center gap-1">
-                                <ShieldCheck size={14} /> Passed
-                              </span>
-                            ) : rec.livenessPassed === false ? (
-                              <span className="text-rose-400 font-bold text-xs inline-flex items-center gap-1">
-                                <ShieldAlert size={14} /> Failed
-                              </span>
-                            ) : (
-                              <span className="text-slate-500 text-xs">—</span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className={`px-3 py-1 text-xs font-extrabold rounded-full tracking-wide uppercase border ${
-                              rec.status === 'working' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' :
-                              rec.status === 'completed' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' :
-                              rec.status === 'on_break' ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' :
-                              'bg-slate-700 text-slate-300 border-slate-600'
-                            }`}>
-                              {rec.status === 'completed' ? '✓ COMPLETED' : (rec.status || 'working').replace('_', ' ')}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Mobile Card View (< md) */}
-            <div className="md:hidden divide-y divide-slate-700/60">
-              {attendance.length === 0 ? (
-                <div className="p-8 text-center text-slate-400">
-                  <p className="text-sm font-semibold text-slate-200">No attendance records found</p>
-                  <p className="text-xs text-slate-500 mt-1">Records will appear here automatically.</p>
-                </div>
+        {/* Desktop Table */}
+        <div className="hidden md:block overflow-x-auto">
+          <table className="w-full text-left text-xs sm:text-sm">
+            <thead className="bg-slate-900/60 text-slate-400 uppercase text-[10px] font-extrabold tracking-wider border-b border-slate-700/60">
+              <tr>
+                <th className="px-6 py-3.5">Live Photo</th>
+                <th className="px-6 py-3.5">Employee</th>
+                <th className="px-6 py-3.5">Date</th>
+                <th className="px-6 py-3.5">Check In</th>
+                <th className="px-6 py-3.5">Check Out</th>
+                <th className="px-6 py-3.5">Net Hours</th>
+                <th className="px-6 py-3.5">AI Match</th>
+                <th className="px-6 py-3.5">Liveness</th>
+                <th className="px-6 py-3.5">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-700/50">
+              {filteredAttendance.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="px-6 py-12 text-center text-slate-400">
+                    <p className="text-sm font-semibold text-slate-200">No attendance records matching filter.</p>
+                  </td>
+                </tr>
               ) : (
-                attendance.map((rec) => {
+                filteredAttendance.map((rec) => {
                   const lateInfo = getLateStatus(rec);
+                  const photoSrc = rec.photoUrl || rec.employee?.faces?.[0]?.imageUrl;
+                  const isManual = rec.faceMatchScore === '-1' || Number(rec.faceMatchScore) === -1 || !rec.faceMatchScore;
+
                   return (
-                    <div key={rec.id} className="p-4 space-y-3 bg-slate-800/30 hover:bg-slate-800/60 transition-colors">
-                      {/* Name + Date + Status */}
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 text-white font-black flex items-center justify-center text-sm shadow-md shrink-0 border border-white/10">
+                    <tr key={rec.id} className="hover:bg-slate-700/30 transition-colors">
+                      {/* Live Captured Photo Column */}
+                      <td className="px-6 py-3.5">
+                        {photoSrc ? (
+                          <div 
+                            onClick={() => setSelectedPhoto(rec)}
+                            className="w-10 h-10 rounded-xl overflow-hidden border border-slate-600 bg-slate-950 relative group cursor-pointer hover:border-purple-400 transition-all"
+                          >
+                            <img src={photoSrc} alt="Check-in" className="w-full h-full object-cover" />
+                            <div className="absolute inset-0 bg-purple-600/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                              <Eye size={14} className="text-white" />
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-500">
+                            <Camera size={16} />
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-6 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 text-white font-black flex items-center justify-center text-xs shadow-md shrink-0 border border-white/10">
                             {(rec.employee?.name || 'Staff').substring(0, 2).toUpperCase()}
                           </div>
-                          <div className="min-w-0">
-                            <h4 className="font-bold text-white text-sm truncate">{rec.employee?.name || 'Kitchen Staff'}</h4>
-                            <p className="text-[11px] text-slate-400 font-mono mt-0.5">
-                              {mounted ? new Date(rec.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '—'} • {lateInfo.assigned}
-                            </p>
+                          <div>
+                            <p className="font-bold text-white text-sm">{rec.employee?.name || 'Kitchen Staff'}</p>
+                            <p className="text-[11px] text-slate-400 font-mono mt-0.5">{rec.employee?.role?.name || rec.employee?.role || 'Staff'}</p>
                           </div>
                         </div>
-                        <span className={`px-2.5 py-1 text-[10px] font-extrabold rounded-full uppercase tracking-wide shrink-0 border ${
+                      </td>
+                      <td className="px-6 py-3.5 font-mono text-slate-300">
+                        {mounted ? new Date(rec.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                      </td>
+                      <td className="px-6 py-3.5">
+                        <p className="font-bold text-slate-100 font-mono text-sm">{formatTime(rec.checkInTime)}</p>
+                        {rec.checkInTime && (
+                          <span className={`text-[10px] font-extrabold inline-block px-2.5 py-0.5 rounded-full mt-1 border uppercase tracking-wider ${
+                            lateInfo.isLate 
+                              ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' 
+                              : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                          }`}>
+                            {lateInfo.label}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-3.5 font-mono font-bold text-slate-300 text-sm">
+                        {formatTime(rec.checkOutTime)}
+                      </td>
+                      <td className="px-6 py-3.5 font-mono font-bold text-emerald-400 text-sm">
+                        {calcHours(rec.checkInTime, rec.checkOutTime)}
+                      </td>
+                      <td className="px-6 py-3.5">
+                        {isManual ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 font-mono">
+                            <Camera size={12} />
+                            Manual Photo
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-mono">
+                            <Camera size={12} />
+                            {Number(rec.faceMatchScore).toFixed(1)}%
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-3.5">
+                        {rec.livenessPassed === true ? (
+                          <span className="text-emerald-400 font-bold text-xs inline-flex items-center gap-1">
+                            <ShieldCheck size={14} /> Passed
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 text-xs">—</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-3.5">
+                        <span className={`px-3 py-1 text-xs font-extrabold rounded-full tracking-wide uppercase border ${
                           rec.status === 'working' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' :
                           rec.status === 'completed' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' :
                           rec.status === 'on_break' ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' :
                           'bg-slate-700 text-slate-300 border-slate-600'
                         }`}>
-                          {rec.status === 'completed' ? '✓ ENDED' : (rec.status || 'working').replace('_', ' ')}
+                          {rec.status === 'completed' ? '✓ COMPLETED' : (rec.status || 'working').replace('_', ' ')}
                         </span>
-                      </div>
-
-                      {/* 3 Metrics grid */}
-                      <div className="grid grid-cols-3 gap-2 bg-slate-900/80 p-2.5 rounded-xl border border-slate-700/60 text-xs">
-                        <div className="text-center">
-                          <span className="text-slate-400 block text-[9px] uppercase font-bold tracking-wider">Check In</span>
-                          <span className="text-slate-100 font-bold font-mono text-xs mt-0.5 block">{formatTime(rec.checkInTime)}</span>
-                        </div>
-                        <div className="text-center border-x border-slate-700/60">
-                          <span className="text-slate-400 block text-[9px] uppercase font-bold tracking-wider">Check Out</span>
-                          <span className="text-slate-100 font-bold font-mono text-xs mt-0.5 block">{formatTime(rec.checkOutTime)}</span>
-                        </div>
-                        <div className="text-center">
-                          <span className="text-slate-400 block text-[9px] uppercase font-bold tracking-wider">Duration</span>
-                          <span className="text-emerald-400 font-bold font-mono text-xs mt-0.5 block">{calcHours(rec.checkInTime, rec.checkOutTime)}</span>
-                        </div>
-                      </div>
-
-                      {/* Late & Verification Footer */}
-                      <div className="flex items-center justify-between text-xs pt-1">
-                        <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${
-                          lateInfo.isLate 
-                            ? 'bg-amber-500/15 text-amber-300 border-amber-500/30' 
-                            : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                        }`}>
-                          {lateInfo.label}
-                        </span>
-
-                        <div className="flex items-center gap-2 text-[11px]">
-                          {rec.faceMatchScore && (
-                            <span className="text-emerald-400 font-bold font-mono inline-flex items-center gap-1">
-                              <Camera size={11} /> {Number(rec.faceMatchScore).toFixed(1)}%
-                            </span>
-                          )}
-                          {rec.livenessPassed === true ? (
-                            <span className="text-emerald-400 font-bold">✓ Live</span>
-                          ) : (
-                            <span className="text-slate-500">—</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
+                      </td>
+                    </tr>
                   );
                 })
               )}
-            </div>
-          </>
-        )}
+            </tbody>
+          </table>
+        </div>
       </section>
+
+      {/* ── HIGH-RES PHOTO INSPECTION MODAL ── */}
+      {selectedPhoto && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700/80 rounded-3xl p-6 max-w-lg w-full shadow-2xl relative">
+            <button
+              onClick={() => setSelectedPhoto(null)}
+              className="absolute top-4 right-4 w-9 h-9 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition-colors"
+            >
+              <X size={20} />
+            </button>
+
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-2xl bg-purple-600 text-white font-extrabold flex items-center justify-center text-sm shadow-md">
+                {(selectedPhoto.employee?.name || 'EL').substring(0, 2).toUpperCase()}
+              </div>
+              <div>
+                <h3 className="font-extrabold text-white text-base">{selectedPhoto.employee?.name || 'Kitchen Staff'}</h3>
+                <p className="text-xs text-slate-400 font-mono">
+                  Checked in at {formatTime(selectedPhoto.checkInTime)}
+                </p>
+              </div>
+            </div>
+
+            {/* High Res Image */}
+            <div className="aspect-square w-full rounded-2xl overflow-hidden bg-slate-950 border border-slate-800 relative mb-4">
+              <img
+                src={selectedPhoto.photoUrl || selectedPhoto.employee?.faces?.[0]?.imageUrl || 'https://via.placeholder.com/300'}
+                alt="Captured Punch-In Snapshot"
+                className="w-full h-full object-cover"
+              />
+            </div>
+
+            {/* Verification Metadata Footer */}
+            <div className="grid grid-cols-2 gap-3 bg-slate-800/80 p-3.5 rounded-2xl border border-slate-700/60 text-xs mb-4">
+              <div>
+                <span className="text-slate-400 block text-[10px] font-extrabold uppercase">Verification Mode</span>
+                <span className="font-bold text-white mt-0.5 block">
+                  {selectedPhoto.faceMatchScore === '-1' || Number(selectedPhoto.faceMatchScore) === -1 || !selectedPhoto.faceMatchScore
+                    ? '📸 Manual Live Photo'
+                    : `⚡ AI Face Match (${Number(selectedPhoto.faceMatchScore).toFixed(1)}%)`}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[10px] font-extrabold uppercase">Terminal Location</span>
+                <span className="font-bold text-emerald-400 mt-0.5 block truncate">
+                  {selectedPhoto.gpsLocation || 'Main Kiosk Terminal'}
+                </span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setSelectedPhoto(null)}
+              className="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-xs rounded-xl shadow-lg hover:brightness-110 transition-all"
+            >
+              Close Inspection
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
