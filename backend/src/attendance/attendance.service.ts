@@ -39,42 +39,45 @@ export class AttendanceService {
         const shift = rec.shift || rec.employee?.shift;
         const requiredHours = shift && shift.requiredHours ? Number(shift.requiredHours) : 9;
         const requiredMs = requiredHours * 3600000;
+        const autoCutoffMs = 2 * 3600000; // 2 hours grace period after shift end!
         const checkInMs = new Date(rec.checkInTime).getTime();
         const elapsedMs = now - checkInMs;
 
-        let shouldComplete = elapsedMs >= requiredMs;
+        let shouldComplete = elapsedMs >= (requiredMs + autoCutoffMs);
 
-        // Also auto-complete if shift endTime has passed by 15+ minutes
+        // Also check if shift endTime + 2 hours has passed
         if (shift && shift.endTime && !shouldComplete) {
           const shiftEnd = new Date(rec.checkInTime);
           const utcH = shift.endTime.getUTCHours();
           const utcM = shift.endTime.getUTCMinutes();
           shiftEnd.setHours(utcH, utcM, 0, 0);
-          // If shift end time is for the next day (e.g. night shift), add 1 day
           if (shiftEnd.getTime() < checkInMs) {
             shiftEnd.setDate(shiftEnd.getDate() + 1);
           }
-          if (now >= shiftEnd.getTime() && (now - shiftEnd.getTime()) > 900000) { // 15 min buffer
+          const cutOffTime = shiftEnd.getTime() + autoCutoffMs;
+          if (now >= cutOffTime) {
             shouldComplete = true;
           }
         }
 
         if (shouldComplete) {
-          const autoCheckOutTime = new Date(checkInMs + Math.min(elapsedMs, requiredMs));
-          const grossMinutes = Math.floor((autoCheckOutTime.getTime() - checkInMs) / 60000);
+          const autoCheckOutTime = new Date();
+          // Capped at shift requiredMinutes (overtime beyond shift is unpayable)
+          const payableRegularMinutes = requiredHours * 60;
           const penaltyMins = rec.penaltyDeductionMinutes || 0;
-          const netWorkingMinutes = Math.max(0, grossMinutes - penaltyMins);
+          const netWorkingMinutes = Math.max(0, payableRegularMinutes - penaltyMins);
 
           await this.prisma.attendanceRecord.update({
             where: { id: rec.id },
             data: {
               status: 'completed',
               checkOutTime: autoCheckOutTime,
-              regularMinutes: grossMinutes,
+              regularMinutes: payableRegularMinutes,
+              overtimeMinutes: 0,
               netWorkingMinutes,
             },
           });
-          console.log(`[AutoEnd] Completed shift for employee ${rec.employeeId} after ${Math.round(elapsedMs / 60000)}m`);
+          console.log(`[AutoEnd] Auto-completed duty for employee ${rec.employeeId} (2h after shift end). Overtime = 0.`);
           this.clearCache();
         }
       }
@@ -207,7 +210,7 @@ export class AttendanceService {
 
     const record = await this.prisma.attendanceRecord.findUnique({
       where: { id: recordId },
-      include: { employee: true, breaks: true },
+      include: { employee: { include: { shift: true } }, shift: true, breaks: true },
     });
     if (!record) throw new BadRequestException('Attendance record not found');
 
@@ -215,6 +218,13 @@ export class AttendanceService {
     const grossMs = checkOutTime.getTime() - checkInMs;
     const grossMinutes = Math.max(0, Math.floor(grossMs / 60000));
     const penaltyMins = record.penaltyDeductionMinutes || 0;
+
+    const shiftObj = record.shift || record.employee?.shift;
+    const requiredHours = shiftObj && shiftObj.requiredHours ? Number(shiftObj.requiredHours) : 9;
+    const maxPayableRegularMinutes = requiredHours * 60;
+
+    // Overtime is NOT payable: Regular minutes capped at shift required minutes!
+    const payableRegularMinutes = Math.min(grossMinutes, maxPayableRegularMinutes);
 
     // Calculate total break duration
     let breakMinutes = 0;
@@ -228,20 +238,7 @@ export class AttendanceService {
 
     const netWorkingMinutes = Math.max(
       0,
-      grossMinutes - breakMinutes - penaltyMins,
-    );
-    const workedHours = Math.round((netWorkingMinutes / 60) * 100) / 100;
-
-    // Salary Math: e.g. Base ₹15,000 / 30 = ₹500/day -> ₹500 / 24 = ₹20.833/hr
-    const monthlySalary = (record.employee?.salaryRate ? Number(record.employee.salaryRate) : 0) || 15000;
-    const dailyRate = monthlySalary / 30;
-    const hourlyRate = dailyRate / 24;
-
-    const penaltyMoneyDeduction = (penaltyMins / 60) * hourlyRate;
-    const grossEarnedMoney = (grossMinutes / 60) * hourlyRate;
-    const netEarnedMoney = Math.max(
-      0,
-      Math.round((grossEarnedMoney - penaltyMoneyDeduction) * 100) / 100,
+      payableRegularMinutes - breakMinutes - penaltyMins,
     );
 
     const updatedRec = await this.prisma.attendanceRecord.update({
@@ -249,7 +246,8 @@ export class AttendanceService {
       data: {
         checkOutTime,
         status: 'completed',
-        regularMinutes: grossMinutes,
+        regularMinutes: payableRegularMinutes,
+        overtimeMinutes: 0,
         breakMinutes,
         netWorkingMinutes,
       },

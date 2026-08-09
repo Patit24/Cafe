@@ -29,10 +29,12 @@ export default function DutyTimerScreen() {
     return () => clearInterval(timer);
   }, [isOnBreak]);
 
-  // Auto-end duty when shift completes
+  // Auto-end duty 2 hours after shift end time (unpayable overtime)
   useEffect(() => {
     if (autoEndRef.current) return;
-    if (shiftTotalSeconds > 0 && elapsedSeconds >= shiftTotalSeconds) {
+    const autoCutoffSeconds = 2 * 3600; // 2 hours grace period after shift end
+    const autoEndSeconds = shiftTotalSeconds + autoCutoffSeconds;
+    if (shiftTotalSeconds > 0 && elapsedSeconds >= autoEndSeconds) {
       autoEndRef.current = true;
       setAutoEndTriggered(true);
       handleAutoCheckOut();
@@ -115,8 +117,9 @@ export default function DutyTimerScreen() {
 
   const displayName = employee?.name || employeeName || 'Employee';
 
-  // Real-time earned pay calculation
-  const earnedSeconds = Math.max(0, elapsedSeconds - (penaltyMinutes * 60));
+  // Real-time earned pay calculation (payable working seconds capped at required shift hours)
+  const payableWorkingSeconds = Math.min(elapsedSeconds, shiftTotalSeconds);
+  const earnedSeconds = Math.max(0, payableWorkingSeconds - (penaltyMinutes * 60));
   const earnedPay = Math.round((earnedSeconds / 3600) * hourlyPayRate * 100) / 100;
   const penaltyPay = Math.round(((penaltyMinutes / 60) * hourlyPayRate) * 100) / 100;
 
