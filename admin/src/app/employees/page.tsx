@@ -128,7 +128,10 @@ export default function EmployeesPage() {
 
     const startStr = parseTime(shift.startTime) || '08:00 AM';
     const endStr = parseTime(shift.endTime) || '05:00 PM';
-    const shiftName = shift.name ? ` (${shift.name})` : '';
+    let shiftName = '';
+    if (shift.name && !/^\d{2}:\d{2}\s*-\s*\d{2}:\d{2}$/.test(shift.name.trim())) {
+      shiftName = ` (${shift.name})`;
+    }
 
     return `${startStr} - ${endStr}${shiftName}`;
   };

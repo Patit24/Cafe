@@ -23,7 +23,7 @@ export class EmployeesService {
   }
 
   private async getOrCreateShift(dutyStartTime?: string, dutyEndTime?: string, shiftId?: string): Promise<string | null> {
-    if (shiftId) return shiftId;
+    if (shiftId && !dutyStartTime && !dutyEndTime) return shiftId;
     if (!dutyStartTime || !dutyEndTime) {
       dutyStartTime = '08:00';
       dutyEndTime = '17:00';
@@ -90,9 +90,7 @@ export class EmployeesService {
   }
 
   async findAll() {
-    if (this.cacheData && Date.now() - this.cacheTimestamp < 10000) {
-      return this.cacheData;
-    }
+    this.clearCache();
     const results = await this.prisma.employee.findMany({
       include: {
         department: true,
@@ -108,8 +106,6 @@ export class EmployeesService {
       },
       orderBy: { createdAt: 'desc' },
     });
-    this.cacheData = results;
-    this.cacheTimestamp = Date.now();
     return results;
   }
 
@@ -135,9 +131,11 @@ export class EmployeesService {
       roleId = r.id;
     }
 
-    let assignedShiftId = shiftId;
+    let assignedShiftId: string | null | undefined = undefined;
     if (dutyStartTime && dutyEndTime) {
-      assignedShiftId = await this.getOrCreateShift(dutyStartTime, dutyEndTime, shiftId);
+      assignedShiftId = await this.getOrCreateShift(dutyStartTime, dutyEndTime, undefined);
+    } else if (shiftId) {
+      assignedShiftId = shiftId;
     }
 
     const updated = await this.prisma.employee.update({
