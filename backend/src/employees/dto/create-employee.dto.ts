@@ -40,6 +40,14 @@ export class CreateEmployeeDto {
   @IsUUID()
   shiftId?: string;
 
+  @IsOptional()
+  @IsString()
+  dutyStartTime?: string;
+
+  @IsOptional()
+  @IsString()
+  dutyEndTime?: string;
+
   @IsEnum(SalaryTypeDto)
   salaryType!: SalaryTypeDto;
 
