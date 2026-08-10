@@ -33,8 +33,8 @@ export class AttendanceController {
   }
 
   @Post('check-out/:recordId')
-  checkOut(@Param('recordId') recordId: string) {
-    return this.attendanceService.checkOut(recordId);
+  checkOut(@Param('recordId') recordId: string, @Body() body?: { checkOutPhotoUrl?: string }) {
+    return this.attendanceService.checkOut(recordId, body?.checkOutPhotoUrl);
   }
 
   @Post('verify-face')

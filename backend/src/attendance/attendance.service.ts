@@ -215,7 +215,7 @@ export class AttendanceService {
     return res;
   }
 
-  async checkOut(recordId: string) {
+  async checkOut(recordId: string, checkOutPhotoUrl?: string) {
     const checkOutTime = new Date();
 
     const record = await this.prisma.attendanceRecord.findUnique({
@@ -260,6 +260,7 @@ export class AttendanceService {
         overtimeMinutes: 0,
         breakMinutes,
         netWorkingMinutes,
+        ...(checkOutPhotoUrl ? { checkOutPhotoUrl } : {}),
       },
     });
     this.clearCache();
