@@ -90,8 +90,7 @@ export class EmployeesService {
   }
 
   async findAll() {
-    this.clearCache();
-    let results = await this.prisma.employee.findMany({
+    const results = await this.prisma.employee.findMany({
       include: {
         department: true,
         role: true,
@@ -106,53 +105,14 @@ export class EmployeesService {
       },
       orderBy: { createdAt: 'desc' },
     });
-
-    // Auto-backfill shift if any employee does not have a shift assigned
-    const unassigned = results.filter((e) => !e.shiftId || !e.shift);
-    if (unassigned.length > 0) {
-      const defaultShiftId = await this.getOrCreateShift('08:00', '17:00');
-      if (defaultShiftId) {
-        await this.prisma.employee.updateMany({
-          where: { id: { in: unassigned.map((e) => e.id) } },
-          data: { shiftId: defaultShiftId },
-        });
-        results = await this.prisma.employee.findMany({
-          include: {
-            department: true,
-            role: true,
-            shift: true,
-            faces: {
-              select: {
-                id: true,
-                angle: true,
-                createdAt: true,
-              },
-            },
-          },
-          orderBy: { createdAt: 'desc' },
-        });
-      }
-    }
-
     return results;
   }
 
-  async findOne(id: string) {
-    let emp = await this.prisma.employee.findUnique({
+  findOne(id: string) {
+    return this.prisma.employee.findUnique({
       where: { id },
       include: { department: true, role: true, shift: true, faces: true },
     });
-    if (emp && (!emp.shiftId || !emp.shift)) {
-      const defaultShiftId = await this.getOrCreateShift('08:00', '17:00');
-      if (defaultShiftId) {
-        emp = await this.prisma.employee.update({
-          where: { id },
-          data: { shiftId: defaultShiftId },
-          include: { department: true, role: true, shift: true, faces: true },
-        });
-      }
-    }
-    return emp;
   }
 
   async update(id: string, updateEmployeeDto: any) {
