@@ -28,13 +28,34 @@ export default function EditEmployeePage() {
         const res = await fetch(`${API_BASE_URL}/employees/${id}`);
         if (!res.ok) throw new Error('Failed to fetch');
         const data = await res.json();
+
+        let startT = '08:00';
+        let endT = '17:00';
+        if (data.shift && data.shift.startTime && data.shift.endTime) {
+          const parseTimeStr = (val: any) => {
+            if (typeof val === 'string') {
+              if (val.includes('T')) return val.split('T')[1].substring(0, 5);
+              return val.substring(0, 5);
+            }
+            const d = new Date(val);
+            if (!isNaN(d.getTime())) {
+              const h = d.getUTCHours().toString().padStart(2, '0');
+              const m = d.getUTCMinutes().toString().padStart(2, '0');
+              return `${h}:${m}`;
+            }
+            return '08:00';
+          };
+          startT = parseTimeStr(data.shift.startTime);
+          endT = parseTimeStr(data.shift.endTime);
+        }
+
         setEmployee({
           name: data.name || '',
           role: data.role?.name || 'Kitchen Staff',
           baseRate: data.salaryRate || '15000',
           salaryType: data.salaryType || 'monthly',
-          dutyStartTime: '08:00',
-          dutyEndTime: '17:00',
+          dutyStartTime: startT,
+          dutyEndTime: endT,
         });
       } catch (err) {
         console.error(err);
@@ -58,6 +79,8 @@ export default function EditEmployeePage() {
       role: roleValue,
       salaryRate: rate,
       salaryType: employee.salaryType,
+      dutyStartTime: employee.dutyStartTime,
+      dutyEndTime: employee.dutyEndTime,
     };
 
     try {

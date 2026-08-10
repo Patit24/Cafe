@@ -90,7 +90,48 @@ export default function EmployeesPage() {
     );
   });
 
-  const enrolledCount = employees.filter(e => e.faces && e.faces.length > 0).length;
+  const formatShiftTime = (shift: any) => {
+    if (!shift || (!shift.startTime && !shift.endTime)) {
+      return '08:00 AM - 05:00 PM (Standard Day)';
+    }
+
+    const parseTime = (val: any) => {
+      if (!val) return '';
+      if (typeof val === 'string') {
+        if (val.includes('T')) {
+          const timePart = val.split('T')[1]?.split('.')[0] || '';
+          const [hStr, mStr] = timePart.split(':');
+          let h = parseInt(hStr, 10);
+          if (isNaN(h)) return val;
+          const m = mStr || '00';
+          const ampm = h >= 12 ? 'PM' : 'AM';
+          h = h % 12 || 12;
+          return `${h.toString().padStart(2, '0')}:${m} ${ampm}`;
+        } else if (val.includes(':')) {
+          const [hStr, mStr] = val.split(':');
+          let h = parseInt(hStr, 10);
+          if (isNaN(h)) return val;
+          const m = mStr.substring(0, 2) || '00';
+          const ampm = h >= 12 ? 'PM' : 'AM';
+          h = h % 12 || 12;
+          return `${h.toString().padStart(2, '0')}:${m} ${ampm}`;
+        }
+      }
+      const d = new Date(val);
+      if (isNaN(d.getTime())) return String(val);
+      let h = d.getUTCHours();
+      const m = d.getUTCMinutes().toString().padStart(2, '0');
+      const ampm = h >= 12 ? 'PM' : 'AM';
+      h = h % 12 || 12;
+      return `${h.toString().padStart(2, '0')}:${m} ${ampm}`;
+    };
+
+    const startStr = parseTime(shift.startTime) || '08:00 AM';
+    const endStr = parseTime(shift.endTime) || '05:00 PM';
+    const shiftName = shift.name ? ` (${shift.name})` : '';
+
+    return `${startStr} - ${endStr}${shiftName}`;
+  };
 
   return (
     <div className="p-3.5 sm:p-6 lg:p-8 space-y-6 lg:space-y-8 pb-24 bg-slate-900 text-slate-100 min-h-screen">
@@ -161,7 +202,7 @@ export default function EmployeesPage() {
               <Camera size={16} />
             </div>
           </div>
-          <p className="text-2xl sm:text-3xl font-black text-blue-400 mt-2">{enrolledCount}</p>
+          <p className="text-2xl sm:text-3xl font-black text-blue-400 mt-2">{employees.filter(e => e.faces && e.faces.length > 0).length}</p>
           <p className="text-[11px] text-blue-300/80 mt-1">Biometric templates saved</p>
         </div>
 
@@ -280,7 +321,7 @@ export default function EmployeesPage() {
                       <td className="py-4 px-4 whitespace-nowrap">
                         <div className="bg-slate-900/80 px-3 py-1.5 rounded-xl border border-slate-700/80 inline-flex items-center gap-1.5 font-mono text-xs text-purple-300">
                           <Clock size={13} className="text-purple-400" />
-                          <span>08:00 AM - 05:00 PM (Standard Day)</span>
+                          <span>{formatShiftTime(emp.shift)}</span>
                         </div>
                       </td>
                       <td className="py-4 px-4 whitespace-nowrap">

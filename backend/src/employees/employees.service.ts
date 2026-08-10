@@ -22,8 +22,46 @@ export class EmployeesService {
     this.cacheTimestamp = 0;
   }
 
+  private async getOrCreateShift(dutyStartTime?: string, dutyEndTime?: string, shiftId?: string): Promise<string | null> {
+    if (shiftId) return shiftId;
+    if (!dutyStartTime || !dutyEndTime) {
+      dutyStartTime = '08:00';
+      dutyEndTime = '17:00';
+    }
+
+    // Clean HH:MM string format
+    const cleanStart = dutyStartTime.trim().substring(0, 5);
+    const cleanEnd = dutyEndTime.trim().substring(0, 5);
+
+    const startTime = new Date(`1970-01-01T${cleanStart}:00.000Z`);
+    const endTime = new Date(`1970-01-01T${cleanEnd}:00.000Z`);
+
+    let requiredHours = (endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60);
+    if (requiredHours <= 0) requiredHours += 24;
+
+    let shift = await this.prisma.shiftTemplate.findFirst({
+      where: {
+        startTime: { equals: startTime },
+        endTime: { equals: endTime },
+      },
+    });
+
+    if (!shift) {
+      shift = await this.prisma.shiftTemplate.create({
+        data: {
+          name: `${cleanStart} - ${cleanEnd}`,
+          startTime,
+          endTime,
+          requiredHours: Math.round(requiredHours * 100) / 100,
+        },
+      });
+    }
+
+    return shift.id;
+  }
+
   async create(createEmployeeDto: any) {
-    const { role, ...dtoData } = createEmployeeDto;
+    const { role, dutyStartTime, dutyEndTime, shiftId, ...dtoData } = createEmployeeDto;
     let roleId = dtoData.roleId;
 
     if (!roleId) {
@@ -37,10 +75,13 @@ export class EmployeesService {
       roleId = r.id;
     }
 
+    const assignedShiftId = await this.getOrCreateShift(dutyStartTime, dutyEndTime, shiftId);
+
     const res = await this.prisma.employee.create({
       data: {
         ...dtoData,
         roleId,
+        ...(assignedShiftId ? { shiftId: assignedShiftId } : {}),
       },
       include: { role: true, department: true, shift: true, faces: true },
     });
@@ -80,7 +121,7 @@ export class EmployeesService {
   }
 
   async update(id: string, updateEmployeeDto: any) {
-    const { role, ...dtoData } = updateEmployeeDto;
+    const { role, dutyStartTime, dutyEndTime, shiftId, ...dtoData } = updateEmployeeDto;
     let roleId = dtoData.roleId;
 
     if (role !== undefined) {
@@ -94,11 +135,17 @@ export class EmployeesService {
       roleId = r.id;
     }
 
+    let assignedShiftId = shiftId;
+    if (dutyStartTime && dutyEndTime) {
+      assignedShiftId = await this.getOrCreateShift(dutyStartTime, dutyEndTime, shiftId);
+    }
+
     const updated = await this.prisma.employee.update({
       where: { id },
       data: {
         ...dtoData,
         ...(roleId !== undefined ? { roleId } : {}),
+        ...(assignedShiftId !== undefined ? { shiftId: assignedShiftId } : {}),
       },
       include: { role: true, department: true, shift: true, faces: true },
     });

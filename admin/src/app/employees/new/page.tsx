@@ -88,6 +88,8 @@ export default function NewEmployeePage() {
       role: roleValue,
       salaryType: newEmployee.salaryType,
       salaryRate: rate,
+      dutyStartTime: newEmployee.dutyStartTime,
+      dutyEndTime: newEmployee.dutyEndTime,
       isActive: true,
     };
 
