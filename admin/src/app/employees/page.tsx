@@ -92,7 +92,7 @@ export default function EmployeesPage() {
 
   const formatShiftTime = (shift: any) => {
     if (!shift || (!shift.startTime && !shift.endTime)) {
-      return '08:00 AM - 05:00 PM (Standard Day)';
+      return '08:00 AM - 05:00 PM';
     }
 
     const parseTime = (val: any) => {
@@ -128,12 +128,8 @@ export default function EmployeesPage() {
 
     const startStr = parseTime(shift.startTime) || '08:00 AM';
     const endStr = parseTime(shift.endTime) || '05:00 PM';
-    let shiftName = '';
-    if (shift.name && !/^\d{2}:\d{2}\s*-\s*\d{2}:\d{2}$/.test(shift.name.trim())) {
-      shiftName = ` (${shift.name})`;
-    }
 
-    return `${startStr} - ${endStr}${shiftName}`;
+    return `${startStr} - ${endStr}`;
   };
 
   return (
@@ -254,7 +250,7 @@ export default function EmployeesPage() {
                 <th className="py-4 px-6">Full Name</th>
                 <th className="py-4 px-4">Role / Position</th>
                 <th className="py-4 px-4">Base Rate</th>
-                <th className="py-4 px-4">Assigned Duty Hours</th>
+                <th className="py-4 px-4">ASSIGNED DUTY TIME (START - END)</th>
                 <th className="py-4 px-4">Status</th>
                 <th className="py-4 px-6 text-right">Actions</th>
               </tr>

@@ -128,25 +128,35 @@ export class AttendanceService {
     const checkInTime = new Date();
     let penaltyDeductionMinutes = 0;
 
+    let shiftStartHour = 8;
+    let shiftStartMinute = 0;
+
     if (employee.shift && employee.shift.startTime) {
-      const shiftStart = new Date(checkInTime);
-      shiftStart.setHours(
-        employee.shift.startTime.getUTCHours(),
-        employee.shift.startTime.getUTCMinutes(),
-        0,
-        0,
-      );
+      const st = employee.shift.startTime;
+      if (typeof st === 'string') {
+        const parts = (st as string).includes('T')
+          ? (st as string).split('T')[1]?.split(':') || []
+          : (st as string).split(':');
+        shiftStartHour = parseInt(parts[0] || '8', 10);
+        shiftStartMinute = parseInt(parts[1] || '0', 10);
+      } else if (st instanceof Date && !isNaN(st.getTime())) {
+        shiftStartHour = st.getUTCHours();
+        shiftStartMinute = st.getUTCMinutes();
+      }
+    }
 
-      const diffMs = checkInTime.getTime() - shiftStart.getTime();
-      const diffMinutes = Math.floor(diffMs / 60000);
+    const shiftStart = new Date(checkInTime);
+    shiftStart.setHours(shiftStartHour, shiftStartMinute, 0, 0);
 
-      if (diffMinutes > 0) {
-        // Late Penalty Rules: 10 mins late -> 1 hr salary, 30 mins late -> 2 hrs salary
-        if (diffMinutes >= 30) {
-          penaltyDeductionMinutes = 120; // 2 hours
-        } else if (diffMinutes >= 10) {
-          penaltyDeductionMinutes = 60; // 1 hour
-        }
+    const diffMs = checkInTime.getTime() - shiftStart.getTime();
+    const diffMinutes = Math.floor(diffMs / 60000);
+
+    if (diffMinutes > 0) {
+      // Late Penalty Rules: 10 mins late -> 1 hr salary penalty, 30 mins late -> 2 hrs salary penalty
+      if (diffMinutes >= 30) {
+        penaltyDeductionMinutes = 120; // 2 hours penalty
+      } else if (diffMinutes >= 10) {
+        penaltyDeductionMinutes = 60; // 1 hour penalty
       }
     }
 
