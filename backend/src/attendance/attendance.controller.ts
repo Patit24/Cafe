@@ -44,6 +44,25 @@ export class AttendanceController {
     return this.attendanceService.verifyFace(body.employeeId, body.livePhotoBase64, body.liveVector);
   }
 
+  @Post('score-frames')
+  scoreFrames(
+    @Body() body: {
+      employeeId: string;
+      frames: string[];
+      tPass?: number;
+      tReview?: number;
+      tFloor?: number;
+      photoUrl?: string;
+    },
+  ) {
+    return this.attendanceService.scoreFrames(body);
+  }
+
+  @Get('biometric-audit-logs')
+  getBiometricAuditLogs() {
+    return this.attendanceService.getAuditLogs();
+  }
+
   @Get()
   findAll() {
     return this.attendanceService.findAll();

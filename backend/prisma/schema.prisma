@@ -53,15 +53,17 @@ model Employee {
   salaryType     SalaryType         @map("salary_type")
   salaryRate     Decimal            @map("salary_rate") @db.Decimal(10, 2)
   overtimeRate   Decimal?           @default(0) @map("overtime_rate") @db.Decimal(10, 2)
-  isActive       Boolean?           @default(true) @map("is_active")
-  createdAt      DateTime           @default(now()) @db.Timestamptz(6)
-  attendances    AttendanceRecord[]
-  faces          EmployeeFace[]
-  department     Department?        @relation(fields: [departmentId], references: [id])
-  role           Role?              @relation(fields: [roleId], references: [id])
-  shift          ShiftTemplate?     @relation(fields: [shiftId], references: [id])
-  leaves         LeaveApplication[]
-  payrollEntries PayrollEntry[]
+  isActive           Boolean?            @default(true) @map("is_active")
+  needsReEnrollment  Boolean?            @default(false) @map("needs_re_enrollment")
+  createdAt          DateTime            @default(now()) @db.Timestamptz(6)
+  attendances        AttendanceRecord[]
+  faces              EmployeeFace[]
+  biometricLogs      BiometricAuditLog[]
+  department         Department?         @relation(fields: [departmentId], references: [id])
+  role               Role?               @relation(fields: [roleId], references: [id])
+  shift              ShiftTemplate?      @relation(fields: [shiftId], references: [id])
+  leaves             LeaveApplication[]
+  payrollEntries     PayrollEntry[]
 
   @@map("employees")
 }
@@ -197,3 +199,20 @@ enum LeaveType {
   paid
   unpaid
 }
+
+model BiometricAuditLog {
+  id              String    @id @default(uuid()) @db.Uuid
+  employeeId      String?   @map("employee_id") @db.Uuid
+  medianScore     Decimal   @map("median_score") @db.Decimal(5, 2)
+  perFrameScores  Json      @map("per_frame_scores")
+  decision        String    @db.VarChar(50)
+  survivingFrames Int       @default(0) @map("surviving_frames")
+  photoUrl        String?   @map("photo_url")
+  createdAt       DateTime  @default(now()) @db.Timestamptz(6)
+  employee        Employee? @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@index([decision])
+  @@map("biometric_audit_logs")
+}
+

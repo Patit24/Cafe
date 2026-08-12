@@ -436,4 +436,186 @@ export class AttendanceService {
       distance: 1 - maxSimilarity,
     };
   }
+
+  async scoreFrames(dto: {
+    employeeId: string;
+    frames: string[];
+    tPass?: number;
+    tReview?: number;
+    tFloor?: number;
+    photoUrl?: string;
+  }) {
+    const { employeeId, frames, tPass = 88.0, tReview = 83.0, tFloor = 80.0, photoUrl } = dto;
+
+    if (!employeeId) throw new BadRequestException('Claimed employeeId is required');
+    if (!frames || !Array.isArray(frames) || frames.length === 0) {
+      throw new BadRequestException('Array of captured base64 frames is required');
+    }
+
+    const employee = await this.prisma.employee.findUnique({
+      where: { id: employeeId },
+      include: { faces: true },
+    });
+    if (!employee) throw new BadRequestException('Claimed employee not found');
+
+    const storedEmbeddings: number[][] = [];
+    const angles: string[] = [];
+
+    for (const ef of employee.faces) {
+      if (Array.isArray(ef.faceEmbedding) && ef.faceEmbedding.length === 128) {
+        storedEmbeddings.push(ef.faceEmbedding as number[]);
+        angles.push(ef.angle || 'Front View');
+      } else if (ef.imageUrl) {
+        try {
+          const vec = await extractFaceVectorFromBase64(ef.imageUrl);
+          if (vec && vec.length === 128) {
+            storedEmbeddings.push(vec);
+            angles.push(ef.angle || 'Front View');
+            this.prisma.employeeFace.update({
+              where: { id: ef.id },
+              data: { faceEmbedding: vec },
+            }).catch(() => {});
+          }
+        } catch (e) {
+          console.warn('Vector extraction backfill error:', e);
+        }
+      }
+    }
+
+    if (storedEmbeddings.length === 0) {
+      return {
+        decision: 'recapture_needed',
+        reason: 'no_registered_faces',
+        medianScore: 0,
+        survivingFrames: 0,
+        perFrameScores: [],
+      };
+    }
+
+    const perFrameScores: { frameIndex: number; score: number; status: 'survived' | 'rejected' }[] = [];
+    const survivingScores: number[] = [];
+
+    for (let i = 0; i < frames.length; i++) {
+      const frameBase64 = frames[i];
+      if (!frameBase64 || typeof frameBase64 !== 'string' || frameBase64.length < 100) {
+        perFrameScores.push({ frameIndex: i + 1, score: 0, status: 'rejected' });
+        continue;
+      }
+
+      try {
+        const liveVec = await extractFaceVectorFromBase64(frameBase64);
+        if (!liveVec || liveVec.length !== 128) {
+          perFrameScores.push({ frameIndex: i + 1, score: 0, status: 'rejected' });
+          continue;
+        }
+
+        let frameMaxSim = 0;
+        for (const storedVec of storedEmbeddings) {
+          const sim = cosineSimilarity(liveVec, storedVec);
+          if (sim > frameMaxSim) frameMaxSim = sim;
+        }
+
+        const frameScore = Math.round(frameMaxSim * 10000) / 100;
+        perFrameScores.push({ frameIndex: i + 1, score: frameScore, status: 'survived' });
+        survivingScores.push(frameScore);
+      } catch (err) {
+        perFrameScores.push({ frameIndex: i + 1, score: 0, status: 'rejected' });
+      }
+    }
+
+    const survivingCount = survivingScores.length;
+    if (survivingCount < 3) {
+      await this.prisma.biometricAuditLog.create({
+        data: {
+          employeeId,
+          medianScore: 0,
+          perFrameScores: perFrameScores as any,
+          decision: 'recapture_needed',
+          survivingFrames: survivingCount,
+          photoUrl: photoUrl || frames[0] || null,
+        },
+      });
+
+      return {
+        decision: 'recapture_needed',
+        reason: 'insufficient_surviving_frames',
+        message: 'Quality gate failed: Fewer than 3 clear frames detected. Please adjust lighting and hold still.',
+        survivingFrames: survivingCount,
+        medianScore: 0,
+        perFrameScores,
+      };
+    }
+
+    survivingScores.sort((a, b) => a - b);
+    const mid = Math.floor(survivingScores.length / 2);
+    const medianScore = survivingScores.length % 2 !== 0
+      ? survivingScores[mid]
+      : (survivingScores[mid - 1] + survivingScores[mid]) / 2;
+
+    const roundedMedian = Math.round(medianScore * 100) / 100;
+    const countAboveFloor = survivingScores.filter((s) => s >= tFloor).length;
+
+    let decision: 'grant' | 'review' | 'deny' = 'deny';
+
+    if (roundedMedian >= tPass && countAboveFloor >= 4) {
+      decision = 'grant';
+    } else if (roundedMedian >= tReview) {
+      decision = 'review';
+    } else {
+      decision = 'deny';
+    }
+
+    await this.prisma.biometricAuditLog.create({
+      data: {
+        employeeId,
+        medianScore: roundedMedian,
+        perFrameScores: perFrameScores as any,
+        decision,
+        survivingFrames: survivingCount,
+        photoUrl: photoUrl || frames[0] || null,
+      },
+    });
+
+    if (decision === 'review') {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+      const reviewCount = await this.prisma.biometricAuditLog.count({
+        where: {
+          employeeId,
+          decision: 'review',
+          createdAt: { gte: thirtyDaysAgo },
+        },
+      });
+
+      if (reviewCount >= 3) {
+        await this.prisma.employee.update({
+          where: { id: employeeId },
+          data: { needsReEnrollment: true },
+        });
+        console.log(`[BiometricReEnrollment] Auto-flagged employee ${employeeId} for re-enrollment (3+ review scores in 30 days).`);
+      }
+    }
+
+    return {
+      decision,
+      medianScore: roundedMedian,
+      survivingFrames: survivingCount,
+      countAboveFloor,
+      perFrameScores,
+      tPass,
+      tReview,
+      tFloor,
+      needsReEnrollment: employee.needsReEnrollment || false,
+    };
+  }
+
+  getAuditLogs(employeeId?: string) {
+    return this.prisma.biometricAuditLog.findMany({
+      where: employeeId ? { employeeId } : undefined,
+      include: { employee: true },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+  }
 }
