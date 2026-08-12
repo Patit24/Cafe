@@ -265,10 +265,10 @@ export default function CameraScreen() {
 
     setMatchScore(Math.round(bestScore * 10) / 10);
     setBestAngle(angleLabels[bestIndex >= 0 ? bestIndex : 0] || 'Front View');
-    setNoFaceDataError(false);
-    setFailReason(passed ? 'none' : 'mismatch');
+    const isPass = bestScore >= 88;
+    setFailReason(isPass ? 'none' : 'mismatch');
 
-    if (passed) {
+    if (isPass) {
       setStatus('success');
     } else {
       setStatus('failed');
@@ -677,17 +677,7 @@ export default function CameraScreen() {
                 <Text style={styles.resultSub}>Face does not match registered profile for {employee?.name}.</Text>
               </>
             )}
-            <TouchableOpacity
-              style={styles.manualPhotoButton}
-              onPress={handleManualPhotoCheckIn}
-              disabled={submittingAttendance}
-            >
-              {submittingAttendance ? (
-                <ActivityIndicator color="#ffffff" />
-              ) : (
-                <Text style={styles.manualPhotoButtonText}>📸 Take Photo & Start Duty (Manual Override)</Text>
-              )}
-            </TouchableOpacity>
+
 
             <TouchableOpacity
               style={styles.retryButton}
