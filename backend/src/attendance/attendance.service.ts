@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import {
   extractFaceVectorFromBase64,
   euclideanDistance,
+  cosineSimilarity,
   distanceToScore,
 } from '../utils/serverFaceEngine';
 
@@ -413,26 +414,26 @@ export class AttendanceService {
       };
     }
 
-    let minDistance = Infinity;
+    let maxSimilarity = 0;
     let bestAngle = 'None';
 
     for (let i = 0; i < storedEmbeddings.length; i++) {
-      const dist = euclideanDistance(liveVector, storedEmbeddings[i]);
-      if (dist < minDistance) {
-        minDistance = dist;
+      const sim = cosineSimilarity(liveVector, storedEmbeddings[i]);
+      if (sim > maxSimilarity) {
+        maxSimilarity = sim;
         bestAngle = angles[i];
       }
     }
 
-    const score = distanceToScore(minDistance);
-    const passed = score >= 80 && minDistance <= 0.40;
+    const score = Math.round(maxSimilarity * 100);
+    const passed = score >= 82;
 
     return {
       success: passed,
       reason: passed ? 'none' : 'mismatch',
       score,
-      bestAngle: `${bestAngle} (${Math.round(minDistance * 100) / 100} dist)`,
-      distance: minDistance,
+      bestAngle: `${bestAngle} (${score}% match)`,
+      distance: 1 - maxSimilarity,
     };
   }
 }

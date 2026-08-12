@@ -91,6 +91,15 @@ function normalizeL2(vector: number[]): number[] {
   return vector.map((v) => v / norm);
 }
 
+export function cosineSimilarity(a: number[], b: number[]): number {
+  if (!a || !b || a.length !== b.length) return 0;
+  let dot = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+  }
+  return Math.max(0, Math.min(1.0, dot));
+}
+
 export function euclideanDistance(a: number[], b: number[]): number {
   if (!a || !b || a.length !== b.length) return Infinity;
   let sum = 0;

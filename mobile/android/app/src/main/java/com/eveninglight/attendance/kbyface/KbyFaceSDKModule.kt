@@ -127,7 +127,7 @@ class KbyFaceSDKModule(private val reactContext: ReactApplicationContext) :
             val res = Arguments.createMap()
             res.putDouble("similarity", similarity.toDouble())
             res.putDouble("scorePercent", (similarity * 100).toDouble())
-            res.putBoolean("passed", similarity >= 0.75f)
+            res.putBoolean("passed", similarity >= 0.82f)
             promise.resolve(res)
         } catch (e: Exception) {
             promise.reject("SIMILARITY_ERROR", e.message, e)
@@ -186,7 +186,7 @@ class KbyFaceSDKModule(private val reactContext: ReactApplicationContext) :
                 }
             }
 
-            val targetThreshold = if (threshold > 0) threshold.toFloat() else 0.75f
+            val targetThreshold = if (threshold > 0) threshold.toFloat() else 0.82f
             val res = Arguments.createMap()
             res.putDouble("bestScore", (bestScore * 100).toDouble())
             res.putDouble("similarity", bestScore.toDouble())
