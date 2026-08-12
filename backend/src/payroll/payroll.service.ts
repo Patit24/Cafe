@@ -174,15 +174,10 @@ export class PayrollService {
       where: { isActive: true },
     });
     for (const emp of activeEmployees) {
-      const existing = await this.prisma.payrollEntry.findFirst({
-        where: { employeeId: emp.id },
-      });
-      if (!existing) {
-        try {
-          await this.generatePayroll(emp.id, firstDayOfMonth, lastDayOfMonth);
-        } catch (err) {
-          console.error(`Failed to auto-generate payroll for ${emp.id}`, err);
-        }
+      try {
+        await this.generatePayroll(emp.id, firstDayOfMonth, lastDayOfMonth);
+      } catch (err) {
+        console.error(`Failed to auto-generate payroll for ${emp.id}`, err);
       }
     }
 

@@ -97,9 +97,9 @@ export class AttendanceService {
     livenessPassed: boolean = true,
     isManualOverride: boolean = false,
   ) {
-    if (!isManualOverride && faceMatchScore >= 0 && faceMatchScore < 60) {
+    if (faceMatchScore < 88) {
       throw new BadRequestException(
-        'Face verification failed. Score below required 60% threshold.',
+        'Biometric face verification failed. Match score is below the required 88% security threshold.',
       );
     }
 

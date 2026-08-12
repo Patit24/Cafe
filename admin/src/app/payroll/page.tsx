@@ -109,9 +109,27 @@ export default function PayrollPage() {
   };
 
   const openEmployeeProfile = (record: any, empName: string, empCode: string, baseVal: number, workHrs: number, netVal: number, penaltyVal: number, otHrs: number, empAtts: any[], daysWorkedCount: number) => {
-    const monthlySalary = baseVal || 15000;
-    const dailyRate = Math.round((monthlySalary / 30) * 100) / 100;
-    const hourlyRate = Math.round((dailyRate / 9) * 100) / 100;
+    const salaryType = record.employee?.salaryType || 'monthly';
+    const salaryRate = Number(record.employee?.salaryRate || 0);
+
+    let hourlyRate = 0;
+    let dailyRate = 0;
+    let baseSalaryCalc = baseVal;
+
+    if (salaryType === 'hourly') {
+      hourlyRate = salaryRate > 0 ? salaryRate : 150;
+      dailyRate = Math.round(hourlyRate * 9 * 100) / 100;
+      baseSalaryCalc = Math.round(workHrs * hourlyRate * 100) / 100;
+    } else if (salaryType === 'daily') {
+      dailyRate = salaryRate > 0 ? salaryRate : 500;
+      hourlyRate = Math.round((dailyRate / 9) * 100) / 100;
+      baseSalaryCalc = Math.round(daysWorkedCount * dailyRate * 100) / 100;
+    } else {
+      const monthlySalary = baseVal || 15000;
+      dailyRate = Math.round((monthlySalary / 30) * 100) / 100;
+      hourlyRate = Math.round((dailyRate / 9) * 100) / 100;
+      baseSalaryCalc = monthlySalary;
+    }
 
     const startDate = record.periodStart ? new Date(record.periodStart) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
     
@@ -191,7 +209,7 @@ export default function PayrollPage() {
     setSelectedEmployee({
       empName,
       empCode,
-      baseVal: monthlySalary,
+      baseVal: baseSalaryCalc,
       dailyRate,
       hourlyRate,
       workHrs,

@@ -317,8 +317,17 @@ export default function CameraScreen() {
     }
   }, [status, loadingEmployee, performFaceMatching, triggerFastCapture]);
 
-  // Manual Live Photo Capture & Check-In
+  // Manual Live Photo Capture & Verified Check-In
   const handleManualPhotoCheckIn = async () => {
+    if (status !== 'success' || matchScore < 88) {
+      if (Platform.OS === 'web') {
+        alert('❌ Biometric Face Verification Failed! Match score is below the required 88% security threshold. Access Denied.');
+      } else {
+        Alert.alert('Access Denied', 'Biometric Face Verification Failed! Match score is below the required 88% security threshold.');
+      }
+      return;
+    }
+
     setSubmittingAttendance(true);
     try {
       // Force fresh high-quality live photo capture from camera stream
@@ -352,9 +361,9 @@ export default function CameraScreen() {
         employeeId: employeeId || employee?.id,
         deviceId: 'Kiosk-Device-EL90',
         gpsLocation: '12.9716° N, 77.5946° E (Kitchen Main)',
-        faceMatchScore: -1,
-        isManualOverride: true,
-        livenessPassed: false,
+        faceMatchScore: matchScore,
+        isManualOverride: false,
+        livenessPassed: true,
         photoUrl: finalPhoto,
       };
 
@@ -373,13 +382,13 @@ export default function CameraScreen() {
         params: {
           employeeId: employeeId || employee?.id,
           employeeName: employee?.name || 'Kitchen Staff',
-          score: 'Manual Photo Punch-In',
+          score: `${matchScore}% Verified`,
         },
       });
     } catch (err) {
-      console.error('Manual photo check-in error:', err);
+      console.error('Photo check-in error:', err);
       if (Platform.OS === 'web') {
-        alert('Network error submitting manual photo attendance. Please try again.');
+        alert('Network error submitting attendance. Please try again.');
       }
     } finally {
       setSubmittingAttendance(false);
