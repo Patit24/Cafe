@@ -164,8 +164,12 @@ export default function CameraScreen() {
           return;
         }
 
-        const storedTemplates = validFaces.map((f: any) => typeof f.faceEmbedding === 'string' ? f.faceEmbedding : '');
-        const matchRes = await matchLiveFaceNative(nativeEmbedding, storedTemplates, 0.70);
+        const storedTemplates = validFaces.map((f: any) => {
+          if (typeof f.faceEmbedding === 'string' && f.faceEmbedding.length > 20) return f.faceEmbedding;
+          if (f.imageUrl && typeof f.imageUrl === 'string') return f.imageUrl;
+          return '';
+        });
+        const matchRes = await matchLiveFaceNative(nativeEmbedding, storedTemplates, 0.75);
 
         if (matchRes && matchRes.bestIndex >= 0) {
           setMatchScore(Math.round(matchRes.bestScore * 10) / 10);

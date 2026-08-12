@@ -151,14 +151,37 @@ class KbyFaceSDKModule(private val reactContext: ReactApplicationContext) :
                 val storedStr = storedTemplates.getString(i)
                 if (storedStr != null && storedStr.isNotEmpty()) {
                     try {
-                        val storedBytes = Base64.decode(storedStr, Base64.NO_WRAP)
-                        val sim = FaceSDK.similarityCalculation(liveBytes, storedBytes)
-                        if (sim > bestScore) {
-                            bestScore = sim
-                            bestIndex = i
+                        var storedBytes: ByteArray? = null
+                        if (storedStr.startsWith("data:image") || storedStr.length > 5000) {
+                            // Base64 image string - extract KBY template on native device
+                            val cleanBase64 = if (storedStr.contains(",")) {
+                                storedStr.substring(storedStr.indexOf(",") + 1)
+                            } else {
+                                storedStr
+                            }
+                            val imgBytes = Base64.decode(cleanBase64, Base64.NO_WRAP)
+                            val bitmap = BitmapFactory.decodeByteArray(imgBytes, 0, imgBytes.size)
+                            if (bitmap != null) {
+                                val param = FaceDetectionParam()
+                                param.check_liveness = false
+                                val faceBoxes = FaceSDK.faceDetection(bitmap, param)
+                                if (faceBoxes != null && faceBoxes.isNotEmpty()) {
+                                    storedBytes = FaceSDK.templateExtraction(bitmap, faceBoxes[0])
+                                }
+                            }
+                        } else {
+                            storedBytes = Base64.decode(storedStr, Base64.NO_WRAP)
+                        }
+
+                        if (storedBytes != null && storedBytes.isNotEmpty()) {
+                            val sim = FaceSDK.similarityCalculation(liveBytes, storedBytes)
+                            if (sim > bestScore) {
+                                bestScore = sim
+                                bestIndex = i
+                            }
                         }
                     } catch (e: Exception) {
-                        // Skip invalid template
+                        // Skip invalid template or image
                     }
                 }
             }
