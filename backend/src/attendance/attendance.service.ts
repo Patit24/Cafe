@@ -370,6 +370,21 @@ export class AttendanceService {
       if (Array.isArray(ef.faceEmbedding) && ef.faceEmbedding.length === 128) {
         storedEmbeddings.push(ef.faceEmbedding as number[]);
         angles.push(ef.angle || 'Front View');
+      } else if (ef.imageUrl) {
+        try {
+          const vec = await extractFaceVectorFromBase64(ef.imageUrl);
+          if (vec && vec.length === 128) {
+            storedEmbeddings.push(vec);
+            angles.push(ef.angle || 'Front View');
+            // Backfill database asynchronously so future attendance checks are instant
+            this.prisma.employeeFace.update({
+              where: { id: ef.id },
+              data: { faceEmbedding: vec },
+            }).catch((e) => console.warn('Failed async faceEmbedding backfill:', e));
+          }
+        } catch (e) {
+          console.warn('Failed on-the-fly vector extraction for face record:', ef.id, e);
+        }
       }
     }
 

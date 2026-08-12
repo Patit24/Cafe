@@ -199,13 +199,25 @@ export default function AddEmployeeModal({
         }
       }
 
+      let finalEmployee = createdEmployee;
+      if (empId) {
+        try {
+          const updatedRes = await fetch(`${API_BASE_URL}/employees/${empId}`);
+          if (updatedRes.ok) {
+            finalEmployee = await updatedRes.json();
+          }
+        } catch (fetchErr) {
+          console.warn('Could not refetch employee with faces:', fetchErr);
+        }
+      }
+
       if (Platform.OS === 'web') {
         alert(`✅ Employee "${createdEmployee.name}" added with ${capturedFaces.length} face angle(s)!`);
       } else {
         Alert.alert('Success', `Employee "${createdEmployee.name}" added with ${capturedFaces.length} face angle(s)!`);
       }
 
-      onEmployeeAdded(createdEmployee);
+      onEmployeeAdded(finalEmployee);
       resetForm();
       onClose();
     } catch (err: any) {

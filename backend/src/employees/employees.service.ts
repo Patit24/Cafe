@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
 import { PrismaService } from '../prisma/prisma.service';
+import { extractFaceVectorFromBase64 } from '../utils/serverFaceEngine';
 
 export type EmployeeFacePayload = {
   imageUrl?: string;
@@ -159,12 +160,26 @@ export class EmployeesService {
   }
 
   async addFace(employeeId: string, faceData: EmployeeFacePayload) {
+    let embedding: any = faceData.faceEmbedding;
+
+    // If embedding was not sent by client (e.g. mobile app without local face-api), extract on server!
+    if ((!embedding || (Array.isArray(embedding) && embedding.length === 0)) && faceData.imageUrl) {
+      try {
+        const extracted = await extractFaceVectorFromBase64(faceData.imageUrl);
+        if (extracted && extracted.length === 128) {
+          embedding = extracted;
+        }
+      } catch (err) {
+        console.warn('Server face vector extraction warning:', err);
+      }
+    }
+
     const added = await this.prisma.employeeFace.create({
       data: {
         employeeId,
         imageUrl: faceData.imageUrl,
         angle: faceData.angle,
-        faceEmbedding: faceData.faceEmbedding ?? Prisma.JsonNull,
+        faceEmbedding: embedding ?? Prisma.JsonNull,
       },
     });
     this.clearCache();
