@@ -180,7 +180,7 @@ export default function AddEmployeeModal({
         for (const face of capturedFaces) {
           try {
             let embedding: number[] | null = null;
-            if (Platform.OS === 'web' && face.photoUrl) {
+            if (face.photoUrl) {
               embedding = await generateNeuralFaceEmbedding(face.photoUrl);
             }
 

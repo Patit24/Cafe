@@ -40,5 +40,5 @@ example
 
 # generated native folders
 /ios
-/android
+#.android
 .vercel

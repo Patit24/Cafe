@@ -7,6 +7,8 @@ import {
   loadFaceApiModels,
   generateNeuralFaceEmbedding,
   getBestFaceMatch,
+  isNativeKbyFaceSDKAvailable,
+  matchLiveFaceNative,
 } from '../utils/faceEmbedding';
 import { API_BASE_URL } from '@/lib/api';
 
@@ -148,6 +150,34 @@ export default function CameraScreen() {
       setStatus('failed');
       setFailReason('no_face');
       return;
+    }
+
+    if (isNativeKbyFaceSDKAvailable()) {
+      try {
+        console.log('[KbyFaceSDK] Performing high-speed native Android offline face verification...');
+        const nativeEmbedding = await generateNeuralFaceEmbedding(liveScreenshot!);
+        if (!nativeEmbedding) {
+          setMatchScore(0);
+          setBestAngle('No face detected');
+          setStatus('failed');
+          setFailReason('no_face');
+          return;
+        }
+
+        const storedTemplates = validFaces.map((f: any) => typeof f.faceEmbedding === 'string' ? f.faceEmbedding : '');
+        const matchRes = await matchLiveFaceNative(nativeEmbedding, storedTemplates, 0.70);
+
+        if (matchRes && matchRes.bestIndex >= 0) {
+          setMatchScore(Math.round(matchRes.bestScore * 10) / 10);
+          setBestAngle(validFaces[matchRes.bestIndex]?.angle || 'Front View (KBY Native AI)');
+          setNoFaceDataError(false);
+          setFailReason(matchRes.passed ? 'none' : 'mismatch');
+          setStatus(matchRes.passed ? 'success' : 'failed');
+          return;
+        }
+      } catch (nativeErr) {
+        console.warn('[KbyFaceSDK] Native verification error, trying server fallback:', nativeErr);
+      }
     }
 
     if (Platform.OS !== 'web') {
