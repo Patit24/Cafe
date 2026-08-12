@@ -171,29 +171,6 @@ export function getBestFaceMatch(
     return { bestScore: 0, bestIndex: -1, passed: false, noValidStored: true };
   }
 
-  // Check if live vector is a Native Base64 KBY-AI template
-  if (typeof live === 'string') {
-    if (isNativeKbyFaceSDKAvailable()) {
-      // Async bridge call via NativeModules (synced synchronously if needed)
-      let bestScore = 0;
-      let bestIndex = -1;
-      let validCount = 0;
-
-      const validStoredTemplates = stored.filter(s => typeof s === 'string' && s.length > 20);
-      if (validStoredTemplates.length === 0) {
-        return { bestScore: 0, bestIndex: -1, passed: false, noValidStored: true };
-      }
-
-      // KbyFaceSDK async promise resolves best match score
-      KbyFaceSDK.getBestMatch(live, validStoredTemplates, 0.75)
-        .then((res: any) => {
-          console.log('[KbyFaceSDK] Native match result:', res);
-        })
-        .catch(console.error);
-    }
-  }
-
-  // Standard numeric vector fallback
   let bestScore = 0;
   let bestIndex = -1;
   let validCount = 0;
@@ -209,18 +186,13 @@ export function getBestFaceMatch(
         bestScore = score;
         bestIndex = i;
       }
-    } else if (typeof vec === 'string' && typeof live === 'string') {
-      validCount++;
-      // String template fallback score placeholder until native resolves
-      bestScore = 88;
-      bestIndex = i;
     }
   });
 
   return {
     bestScore,
     bestIndex,
-    passed: bestScore >= 70,
+    passed: bestScore >= 80,
     noValidStored: validCount === 0,
   };
 }
@@ -272,9 +244,12 @@ export function euclideanDistance(a: number[], b: number[]): number {
 }
 
 export function distanceToMatchPercent(dist: number): number {
-  if (!isFinite(dist)) return 0;
-  if (dist <= 0.6) {
-    return Math.round((1 - (dist / 0.6) * 0.3) * 100);
+  if (!isFinite(dist) || dist > 0.52) return 0;
+  if (dist <= 0.40) {
+    // High confidence match: 80% to 99%
+    return Math.round(99 - (dist / 0.40) * 19);
+  } else {
+    // Rapidly drop off for distances > 0.40 (different people)
+    return Math.max(0, Math.round(75 - ((dist - 0.40) / 0.12) * 75));
   }
-  return Math.max(0, Math.round((1 - Math.min(1.0, dist)) * 70));
 }

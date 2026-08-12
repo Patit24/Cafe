@@ -425,7 +425,7 @@ export class AttendanceService {
     }
 
     const score = distanceToScore(minDistance);
-    const passed = score >= 75 && minDistance <= 0.50;
+    const passed = score >= 80 && minDistance <= 0.40;
 
     return {
       success: passed,

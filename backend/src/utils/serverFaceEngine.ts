@@ -102,11 +102,11 @@ export function euclideanDistance(a: number[], b: number[]): number {
 }
 
 export function distanceToScore(dist: number): number {
-  if (!isFinite(dist)) return 0;
-  if (dist <= 0.50) {
-    return Math.round(99 - (dist / 0.50) * 24);
+  if (!isFinite(dist) || dist > 0.52) return 0;
+  if (dist <= 0.40) {
+    return Math.round(99 - (dist / 0.40) * 19);
   } else {
-    return Math.max(0, Math.round(70 - ((dist - 0.50) / 0.50) * 50));
+    return Math.max(0, Math.round(75 - ((dist - 0.40) / 0.12) * 75));
   }
 }
 
