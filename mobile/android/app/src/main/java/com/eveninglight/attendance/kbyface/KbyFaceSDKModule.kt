@@ -71,7 +71,7 @@ class KbyFaceSDKModule(private val reactContext: ReactApplicationContext) :
 
             val param = FaceDetectionParam()
             param.check_liveness = checkLiveness
-            param.check_liveness_level = 0
+            param.check_liveness_level = 1 // Strict High-Precision Liveness
 
             val faceBoxes = FaceSDK.faceDetection(bitmap, param)
 
@@ -84,6 +84,15 @@ class KbyFaceSDKModule(private val reactContext: ReactApplicationContext) :
             }
 
             val faceBox = faceBoxes[0]
+            if (checkLiveness && faceBox.liveness < 0.70f) {
+                val res = Arguments.createMap()
+                res.putBoolean("faceDetected", false)
+                res.putString("reason", "liveness_failed")
+                res.putDouble("liveness", faceBox.liveness.toDouble())
+                promise.resolve(res)
+                return
+            }
+
             val templateBytes = FaceSDK.templateExtraction(bitmap, faceBox)
             val templateBase64 = if (templateBytes != null) {
                 Base64.encodeToString(templateBytes, Base64.NO_WRAP)
@@ -127,7 +136,7 @@ class KbyFaceSDKModule(private val reactContext: ReactApplicationContext) :
             val res = Arguments.createMap()
             res.putDouble("similarity", similarity.toDouble())
             res.putDouble("scorePercent", (similarity * 100).toDouble())
-            res.putBoolean("passed", similarity >= 0.82f)
+            res.putBoolean("passed", similarity >= 0.88f)
             promise.resolve(res)
         } catch (e: Exception) {
             promise.reject("SIMILARITY_ERROR", e.message, e)
@@ -186,7 +195,7 @@ class KbyFaceSDKModule(private val reactContext: ReactApplicationContext) :
                 }
             }
 
-            val targetThreshold = if (threshold > 0) threshold.toFloat() else 0.82f
+            val targetThreshold = if (threshold > 0) threshold.toFloat() else 0.88f
             val res = Arguments.createMap()
             res.putDouble("bestScore", (bestScore * 100).toDouble())
             res.putDouble("similarity", bestScore.toDouble())

@@ -169,7 +169,7 @@ export default function CameraScreen() {
           if (f.imageUrl && typeof f.imageUrl === 'string') return f.imageUrl;
           return '';
         });
-        const matchRes = await matchLiveFaceNative(nativeEmbedding, storedTemplates, 0.82);
+        const matchRes = await matchLiveFaceNative(nativeEmbedding, storedTemplates, 0.88);
 
         if (matchRes && matchRes.bestIndex >= 0) {
           setMatchScore(Math.round(matchRes.bestScore * 10) / 10);

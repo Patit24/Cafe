@@ -426,7 +426,7 @@ export class AttendanceService {
     }
 
     const score = Math.round(maxSimilarity * 100);
-    const passed = score >= 82;
+    const passed = score >= 88;
 
     return {
       success: passed,
