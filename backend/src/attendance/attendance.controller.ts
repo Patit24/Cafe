@@ -37,6 +37,18 @@ export class AttendanceController {
     return this.attendanceService.checkOut(recordId, body?.checkOutPhotoUrl);
   }
 
+  @Post('liveness-session/start')
+  startLivenessSession(@Body() body: { employeeId: string }) {
+    return this.attendanceService.createLivenessSession(body.employeeId);
+  }
+
+  @Post('liveness-session/verify-step')
+  verifyLivenessStep(
+    @Body() body: { sessionId: string; stepAction: any; stepVerified: boolean },
+  ) {
+    return this.attendanceService.verifyLivenessStep(body.sessionId, body.stepAction, body.stepVerified);
+  }
+
   @Post('verify-face')
   verifyFace(
     @Body() body: { employeeId: string; livePhotoBase64?: string; liveVector?: number[] },

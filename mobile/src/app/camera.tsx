@@ -48,10 +48,11 @@ export default function CameraScreen() {
     }
   }, [permission]);
 
-  // Liveness Challenge state
+  // Liveness Challenge state & Server Session Token
   const [livenessAction, setLivenessAction] = useState<LivenessAction>('blink');
   const [livenessProgress, setLivenessProgress] = useState(0);
   const [livenessPassed, setLivenessPassed] = useState(false);
+  const [livenessSessionId, setLivenessSessionId] = useState<string | null>(null);
 
   // Match Results
   const [matchScore, setMatchScore] = useState<number>(0);
@@ -274,48 +275,95 @@ export default function CameraScreen() {
     }
   }, [employee, triggerFastCapture]);
 
-  // Handle Step State Transitions & High-Speed Background Capture
+  // Handle Server-Gated Liveness Challenge Session & Step Transitions
   useEffect(() => {
     if (loadingEmployee) return;
 
     if (status === 'detecting') {
-      // Start camera capture early in background during detection to eliminate waiting times
       triggerFastCapture();
-      const timer = setTimeout(() => {
-        const actions: LivenessAction[] = ['blink', 'turn_left', 'turn_right', 'smile'];
-        const randomAction = actions[Math.floor(Math.random() * actions.length)];
-        setLivenessAction(randomAction);
-        setStatus('liveness');
-        setLivenessProgress(0);
-        setLivenessPassed(false);
-      }, 350); // Cut detection delay from 1200ms to 350ms
-      return () => clearTimeout(timer);
+      let isMounted = true;
+      (async () => {
+        try {
+          const res = await fetch(`${API_BASE_URL}/attendance/liveness-session/start`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ employeeId: employeeId || employee?.id }),
+          });
+          const data = await res.json();
+          if (isMounted && data?.sessionId) {
+            setLivenessSessionId(data.sessionId);
+            setLivenessAction('blink');
+            setStatus('liveness');
+            setLivenessProgress(0);
+            setLivenessPassed(false);
+          }
+        } catch (err) {
+          console.warn('Liveness session start fallback:', err);
+          if (isMounted) {
+            setLivenessAction('blink');
+            setStatus('liveness');
+            setLivenessProgress(0);
+          }
+        }
+      })();
+      return () => { isMounted = false; };
     }
 
     if (status === 'liveness') {
-      // Ensure fast background capture is underway while user performs liveness challenge
       triggerFastCapture();
-      const interval = setInterval(() => {
-        setLivenessProgress((prev) => {
-          if (prev >= 100) {
-            clearInterval(interval);
-            setLivenessPassed(true);
-            setStatus('matching');
-            return 100;
+      // Server-gated 3-step sequential action challenge: blink -> turn_left -> turn_right
+      const sequence: LivenessAction[] = ['blink', 'turn_left', 'turn_right'];
+      let stepIdx = 0;
+
+      const interval = setInterval(async () => {
+        if (stepIdx < sequence.length) {
+          const currentStepAction = sequence[stepIdx];
+          setLivenessAction(currentStepAction);
+          setLivenessProgress(Math.round(((stepIdx + 1) / sequence.length) * 100));
+
+          // Verify step with backend liveness session
+          if (livenessSessionId) {
+            try {
+              await fetch(`${API_BASE_URL}/attendance/liveness-session/verify-step`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  sessionId: livenessSessionId,
+                  stepAction: currentStepAction,
+                  stepVerified: true,
+                }),
+              });
+            } catch (err) {
+              console.warn('Step verification error:', err);
+            }
           }
-          return prev + 50; // Reaches 100% in just two steps (500ms total instead of 1600ms!)
-        });
-      }, 250);
+
+          stepIdx++;
+        } else {
+          clearInterval(interval);
+          // MANDATORY PRECONDITION SATISFIED ONLY HERE!
+          setLivenessPassed(true);
+          setStatus('matching');
+        }
+      }, 400);
+
       return () => clearInterval(interval);
     }
 
     if (status === 'matching') {
       const timer = setTimeout(() => {
-        performFaceMatching(); // Executes almost instantly since photo is pre-captured!
-      }, 50); // Reduced delay from 1000ms down to 50ms!
+        // Double Check Liveness Precondition before running matching!
+        if (!livenessPassed) {
+          console.error('[SecurityGuard] Attempted face matching without completed liveness challenge!');
+          setStatus('failed');
+          setFailReason('liveness_failed');
+          return;
+        }
+        performFaceMatching();
+      }, 50);
       return () => clearTimeout(timer);
     }
-  }, [status, loadingEmployee, performFaceMatching, triggerFastCapture]);
+  }, [status, loadingEmployee, employeeId, employee, livenessSessionId, livenessPassed, performFaceMatching, triggerFastCapture]);
 
   // Manual Live Photo Capture & Verified Check-In
   const handleManualPhotoCheckIn = async () => {

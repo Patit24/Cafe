@@ -12,17 +12,83 @@ type LatePenaltyRule = {
   deductHours: number;
 };
 
+export type LivenessAction = 'blink' | 'turn_left' | 'turn_right' | 'smile';
+
+export type LivenessSession = {
+  sessionId: string;
+  employeeId: string;
+  sequence: LivenessAction[];
+  currentStepIndex: number;
+  completedSteps: LivenessAction[];
+  status: 'PENDING' | 'COMPLETED' | 'EXPIRED' | 'FAILED';
+  createdAt: number;
+  expiresAt: number;
+};
+
 @Injectable()
 export class AttendanceService {
   private cacheData: any = null;
   private cacheTimestamp = 0;
   private lastAutoCheck = 0;
+  private livenessSessions = new Map<string, LivenessSession>();
 
   constructor(private prisma: PrismaService) {}
 
   private clearCache() {
     this.cacheData = null;
     this.cacheTimestamp = 0;
+  }
+
+  createLivenessSession(employeeId: string) {
+    const sessionId = `liveness_sess_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    const sequence: LivenessAction[] = ['blink', 'turn_left', 'turn_right'];
+    const session: LivenessSession = {
+      sessionId,
+      employeeId,
+      sequence,
+      currentStepIndex: 0,
+      completedSteps: [],
+      status: 'PENDING',
+      createdAt: Date.now(),
+      expiresAt: Date.now() + 120000, // 2 minutes valid window
+    };
+    this.livenessSessions.set(sessionId, session);
+    return session;
+  }
+
+  verifyLivenessStep(sessionId: string, stepAction: LivenessAction, stepVerified: boolean) {
+    const session = this.livenessSessions.get(sessionId);
+    if (!session) throw new BadRequestException('Invalid or expired liveness session');
+    if (Date.now() > session.expiresAt) {
+      session.status = 'EXPIRED';
+      throw new BadRequestException('Liveness session expired. Please restart challenge.');
+    }
+
+    const expectedAction = session.sequence[session.currentStepIndex];
+    if (stepAction !== expectedAction) {
+      throw new BadRequestException(`Out-of-order liveness action. Expected ${expectedAction}, got ${stepAction}`);
+    }
+
+    if (!stepVerified) {
+      throw new BadRequestException(`Liveness action '${stepAction}' failed verification.`);
+    }
+
+    session.completedSteps.push(stepAction);
+    session.currentStepIndex += 1;
+
+    if (session.currentStepIndex >= session.sequence.length) {
+      session.status = 'COMPLETED';
+    }
+
+    return session;
+  }
+
+  validateLivenessPrecondition(sessionId?: string): boolean {
+    if (!sessionId) return false;
+    const session = this.livenessSessions.get(sessionId);
+    if (!session) return false;
+    if (Date.now() > session.expiresAt) return false;
+    return session.status === 'COMPLETED';
   }
 
   async autoCompleteExpiredShifts() {
@@ -94,9 +160,22 @@ export class AttendanceService {
     gpsLocation: string,
     faceMatchScore: number,
     photoUrl?: string,
-    livenessPassed: boolean = true,
+    livenessPassed: boolean = false,
     isManualOverride: boolean = false,
+    livenessSessionId?: string,
   ) {
+    if (livenessSessionId && !this.validateLivenessPrecondition(livenessSessionId)) {
+      throw new BadRequestException(
+        'Liveness Precondition Failed: Mandatory action challenge sequence (blink -> turn_left -> turn_right) was not completed.',
+      );
+    }
+
+    if (!livenessPassed) {
+      throw new BadRequestException(
+        'Liveness Precondition Failed: Action challenge sequence was not completed or failed verification.',
+      );
+    }
+
     if (faceMatchScore < 88) {
       throw new BadRequestException(
         'Biometric face verification failed. Match score is below the required 88% security threshold.',
